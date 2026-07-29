@@ -1,0 +1,3 @@
+# Sourced fragments have no shebang; the per-file `# shellcheck shell=bash`
+# directive supplies the dialect and a contract test enforces its presence.
+external-sources=true

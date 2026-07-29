@@ -1,0 +1,69 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  # The floor is tmux 3.0, so the matrix has to include versions older than
+  # whatever the runner ships. Built from source, lifting the approach already
+  # used by tmux-worktree's workflow.
+  linux:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        tmux: ['3.0a', '3.2a', '3.4', '3.5a']
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install build deps
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libevent-dev libncurses-dev bison pkg-config jq sqlite3
+
+      - name: build tmux ${{ matrix.tmux }}
+        run: |
+          curl -fsSL "https://github.com/tmux/tmux/releases/download/${{ matrix.tmux }}/tmux-${{ matrix.tmux }}.tar.gz" -o tmux.tar.gz
+          tar xzf tmux.tar.gz
+          cd "tmux-${{ matrix.tmux }}"
+          ./configure --prefix=/usr/local >/dev/null
+          make -j"$(nproc)" >/dev/null
+          sudo make install >/dev/null
+          tmux -V
+
+      - name: install bats
+        run: |
+          git clone --depth 1 --branch v1.12.0 https://github.com/bats-core/bats-core.git /tmp/bats
+          sudo /tmp/bats/install.sh /usr/local
+
+      - run: make test
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+      - run: make lint
+
+  # The point of this job is the *system* bash, which is 3.2. bats on macOS will
+  # happily pick up a brew bash 5 and quietly stop testing the tier that
+  # actually breaks, so the interpreter is pinned explicitly.
+  macos-bash32:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install bats-core jq
+      - name: confirm /bin/bash is 3.2
+        run: /bin/bash --version | head -1 | grep 'version 3'
+      - run: make bash32
+      - run: make test-integration
+
+  # A vendored lib/ that has drifted from its tagged source is how the five
+  # plugins accumulated 26 duplicated capabilities. Consumers run this too.
+  checksum:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: make sync-check

@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+# tmux-toolkit - diagnostics for the shared library.
+#
+# `tick` and `identity` arrive with the UI/identity modules; this build carries
+# the hot set only, and reports that rather than pretending otherwise.
+set -euo pipefail
+
+HERE="$(cd "$(dirname "$(readlink "$0" 2>/dev/null || printf '%s' "$0")")" && pwd)"
+# shellcheck source=../lib/toolkit.sh
+source "$HERE/../lib/toolkit.sh"
+tk_init toolkit
+
+cmd_version() {
+    printf 'tmux-toolkit %s\n' "$(tk_lib_version)"
+    printf 'tmux         %s\n' "$(tk_vers)"
+    printf 'bash         %s\n' "${BASH_VERSION:-unknown}"
+    printf 'lib          %s\n' "$(tk_lib_dir)"
+}
+
+# Each probe runs inside an `if` so `set -e` cannot abort the report halfway
+# through; a diagnostic that stops at the first fault is the least useful kind.
+_probe() {
+    local label="$1"; shift
+    if "$@" >/dev/null 2>&1; then
+        printf '  ok    %s\n' "$label"
+    else
+        printf '  FAIL  %s\n' "$label"
+        TK_DOCTOR_RC=1
+    fi
+}
+
+cmd_doctor() {
+    TK_DOCTOR_RC=0
+    printf 'tmux-toolkit %s\n\n' "$(tk_lib_version)"
+
+    printf 'dependencies\n'
+    _probe "tmux present"    tk_have tmux
+    _probe "sqlite3 present" tk_have sqlite3
+    if tk_have jq; then
+        printf '  ok    jq present\n'
+    else
+        printf '  warn  jq missing (JSON reads degrade; tk_json_path unavailable)\n'
+    fi
+
+    printf '\ntmux\n'
+    _probe "version >= 3.0 (found $(tk_vers))" tk_vers_ge 3.0
+    if tk_tmux_ok; then
+        printf '  ok    server reachable\n'
+    else
+        printf '  warn  no server reachable (fine outside tmux)\n'
+    fi
+
+    printf '\nlibrary\n'
+    local f missing=0
+    for f in core tmux version opt log json sqlite config; do
+        [[ -r "$(tk_lib_dir)/$f.sh" ]] || { printf '  FAIL  lib/%s.sh missing\n' "$f"; missing=1; }
+    done
+    [[ "$missing" -eq 0 ]] && printf '  ok    hot-set modules present\n'
+    [[ "$missing" -eq 0 ]] || TK_DOCTOR_RC=1
+
+    if [[ -r "$(tk_lib_dir)/.checksum" ]]; then
+        local want have
+        want="$(<"$(tk_lib_dir)/.checksum")"
+        have="$(cd "$(tk_plugin_dir)" && find lib -name '*.sh' | sort | xargs shasum | shasum | cut -d' ' -f1)"
+        if [[ "$want" == "$have" ]]; then
+            printf '  ok    lib/ matches its tagged checksum\n'
+        else
+            printf '  FAIL  lib/ has drifted from tmux-toolkit %s\n' "$(tk_lib_version)"
+            printf '        edit the toolkit repo and run `make fanout`, not lib/ in place\n'
+            TK_DOCTOR_RC=1
+        fi
+    fi
+
+    if [[ -n "${TMUX_TOOLKIT_DEV:-}" ]]; then
+        printf '\n  note  TMUX_TOOLKIT_DEV is set; lib/ is being read from\n'
+        printf '        %s/lib\n' "${TMUX_TOOLKIT_DEV%/}"
+    fi
+
+    printf '\n'
+    return "$TK_DOCTOR_RC"
+}
+
+cmd_consumers() {
+    local f dir v
+    f="$(tk_plugin_dir)/consumers.txt"
+    [[ -r "$f" ]] || tk_die "no consumers.txt at $f"
+    while IFS= read -r dir; do
+        case "$dir" in ''|\#*) continue ;; esac
+        dir="${dir/#\~/$HOME}"
+        if [[ -r "$dir/lib/VERSION" ]]; then
+            read -r v < "$dir/lib/VERSION"
+            printf '%-8s %s\n' "$v" "$dir"
+        elif [[ -d "$dir" ]]; then
+            printf '%-8s %s\n' "-" "$dir"
+        else
+            printf '%-8s %s (missing)\n' "?" "$dir"
+        fi
+    done < "$f"
+}
+
+case "${1:-}" in
+    version|--version|-V) cmd_version ;;
+    doctor)               cmd_doctor ;;
+    consumers)            cmd_consumers ;;
+    tick|identity)
+        tk_die "'$1' needs the UI/identity modules, which this build does not carry" ;;
+    ''|-h|--help)
+        cat <<'USAGE'
+usage: tmux-toolkit <command>
+
+  version     library, tmux and bash versions
+  doctor      dependency, version and vendoring checks
+  consumers   the vendored lib/ version under each consumer
+USAGE
+        ;;
+    *) tk_die "unknown command: $1 (try --help)" ;;
+esac

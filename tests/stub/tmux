@@ -1,0 +1,51 @@
+#!/bin/sh
+# Recording tmux stub. Both "stub" and "recording wrapper" in one artifact.
+#
+# A fake binary on PATH is the canonical stub for this library, not an
+# `export -f tmux` shell function, because the library's calls also happen in
+# subprocesses (run-shell handlers, bin/tmux-toolkit, the status engine) and an
+# exported function does not survive into those reliably across bash/sh.
+#
+# TK_STUB_LOG     - full argv appended here, one line per call
+# TK_STUB_FIXTURE - lines of: <glob><US><stdout><US><exit>  where <US> is \x1f.
+#                   matched against the joined argv, first match wins.
+#                   <stdout> is expanded with printf %b, so use \n for newlines
+#                   and \t for tabs.
+#
+# The field separator is \x1f, not a tab, and that is not cosmetic. TAB is IFS
+# *whitespace*, so `IFS=$'\t' read -r a b c` collapses runs of tabs and drops
+# leading ones: the line "-V<TAB><TAB>1" (empty stdout, exit 1) parses as two
+# fields, putting "1" in stdout and leaving exit empty. \x1f is not whitespace,
+# so empty fields survive. The same trap applies to any record format with
+# optional fields.
+# TK_STUB_REAL    - when set, unmatched calls exec the real tmux with -L
+#                   "$TK_STUB_REAL" instead of returning empty.
+
+argv="$*"
+
+if [ -n "${TK_STUB_LOG:-}" ]; then
+    printf '%s\n' "$argv" >> "$TK_STUB_LOG"
+fi
+
+US=$(printf '\037')
+
+if [ -n "${TK_STUB_FIXTURE:-}" ] && [ -r "${TK_STUB_FIXTURE:-}" ]; then
+    while IFS="$US" read -r pat out rc; do
+        [ -n "$pat" ] || continue
+        case "$pat" in \#*) continue ;; esac
+        # shellcheck disable=SC2254
+        case "$argv" in
+            $pat)
+                [ -n "$out" ] && printf '%b\n' "$out"
+                exit "${rc:-0}"
+                ;;
+        esac
+    done < "$TK_STUB_FIXTURE"
+fi
+
+if [ -n "${TK_STUB_REAL:-}" ]; then
+    real=$(PATH=$(echo "$PATH" | tr ':' '\n' | grep -v "$(dirname "$0")" | tr '\n' ':') command -v tmux)
+    [ -n "$real" ] && exec "$real" -L "$TK_STUB_REAL" "$@"
+fi
+
+exit 0

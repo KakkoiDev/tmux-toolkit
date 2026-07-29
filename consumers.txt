@@ -1,0 +1,7 @@
+# Repos that vendor lib/ via git subtree. `make fanout` walks this list.
+# One path per line; ~ is expanded.
+~/Code/tmux-agent-tracker
+~/Code/tmux-agent-resumer
+~/Code/tmux-agent-mesh
+~/Code/tmux-worktree
+~/Code/tmux-session-order
