@@ -12,8 +12,13 @@ nothing on crates.io, npm or PyPI fills the gap. This is that library.
 Vendored, via `git subtree`, into the plugin that uses it:
 
 ```sh
-git subtree add --prefix=lib https://github.com/KakkoiDev/tmux-toolkit.git main --squash
+git subtree add --prefix=lib https://github.com/KakkoiDev/tmux-toolkit.git dist --squash
 ```
+
+Note `dist`, not `main`. `dist` is a subtree split of this repo's `lib/`, so its
+root *is* the library and the consumer gets `lib/core.sh`. Pulling `main` instead
+puts the whole repo at `lib/`, giving you `lib/lib/core.sh` plus a copy of the
+tests and the Makefile. `make dist` regenerates the branch.
 
 Subtree and not submodule: a submodule leaves `lib/` empty on a plain
 `git clone`, and TPM does not `--recurse-submodules`, so every hook would break
