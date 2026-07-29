@@ -111,8 +111,22 @@ tk_setup_real() {
     # otherwise litters /tmp/tmux-$UID with one file per test. It also makes a
     # socket-name collision with the developer's live server impossible rather
     # than merely unlikely.
-    export TMUX_TMPDIR="$TEST_TMPDIR"
-    export TK_SOCKET="tk-test-${BATS_TEST_NUMBER:-0}"
+    #
+    # A unix socket path caps at ~104 bytes on this platform, and `mktemp -d`
+    # under a deep TMPDIR plus tmux's own `tmux-$UID/<name>` suffix can exceed
+    # it: tmux then fails with "File name too long" on every call, which reads
+    # as a broken library rather than a broken path. Fall back to a short dir
+    # when that would happen.
+    TK_SOCKET="tk-test-${BATS_TEST_NUMBER:-0}"
+    local sockdir="$TEST_TMPDIR"
+    if [[ ${#sockdir} -gt 60 ]]; then
+        sockdir="${TMPDIR:-/tmp}/tk$$"
+        sockdir="${sockdir%/}"
+        mkdir -p "$sockdir"
+        TK_SOCKDIR_TMP="$sockdir"
+    fi
+    export TMUX_TMPDIR="$sockdir"
+    export TK_SOCKET
     unset TK_TMUX_DISABLED TMUX TMUX_PANE TMUX_TOOLKIT_DEV TK_LOADED
 
     # A second session keeps the server alive if a test kills the first one.
@@ -129,6 +143,10 @@ tk_setup_real() {
 tk_teardown_real() {
     if [[ -n "${TK_SOCKET:-}" ]]; then
         command tmux -L "$TK_SOCKET" kill-server 2>/dev/null || true
+    fi
+    if [[ -n "${TK_SOCKDIR_TMP:-}" && "$TK_SOCKDIR_TMP" == "${TMPDIR:-/tmp}"/tk* ]]; then
+        rm -rf "$TK_SOCKDIR_TMP"
+        TK_SOCKDIR_TMP=""
     fi
     tk_teardown
 }
