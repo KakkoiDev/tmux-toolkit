@@ -144,3 +144,74 @@ teardown() { tk_teardown; }
     assert_match "$(tk_lib_version)" '[0-9]*.[0-9]*.[0-9]*'
     refute_contains "$(tk_lib_version)" " "
 }
+
+# ── the README may not describe code that does not exist ─────────────
+#
+# An earlier README listed ten modules for toolkit-ui.sh when three existed, and
+# another session went looking for the file itself and found nothing. These tests
+# make that failure mode impossible rather than a matter of diligence.
+
+@test "every module an entry point sources is present on disk" {
+    local entry base missing="" sourced
+    for entry in "$TK_LIB/toolkit.sh" "$TK_LIB/toolkit-ui.sh"; do
+        assert_file "$entry"
+        sourced=$(grep -oE 'source "\$_tk[a-z_]*_src/[a-z-]+\.sh"' "$entry" | sed 's|.*/||; s|"||')
+        assert_list_nonempty "$(basename "$entry") sources" $sourced
+        for base in $sourced; do
+            [[ -f "$TK_LIB/$base" ]] || missing="$missing $(basename "$entry"):$base"
+        done
+    done
+    assert_eq "$missing" ""
+}
+
+@test "every lib module the README names in the entry-point table exists" {
+    local readme="$TK_ROOT/README.md" table mods m missing=""
+    assert_file "$readme"
+    # The two table rows only; the "Not built yet" paragraph below them is
+    # allowed, and required, to name files that do not exist.
+    table=$(grep -E '^\| `lib/toolkit(-ui)?\.sh`' "$readme")
+    assert_list_nonempty "entry-point table rows" $table
+    mods=$(printf '%s' "$table" | grep -oE '`[a-z ]+`' | tr -d '`' | tr ' ' '\n' | sort -u)
+    assert_list_nonempty "modules named in the table" $mods
+    for m in $mods; do
+        case "$m" in ''|lib|toolkit|toolkit-ui|the|above|plus) continue ;; esac
+        [[ -f "$TK_LIB/$m.sh" ]] || missing="$missing $m"
+    done
+    assert_eq "$missing" ""
+}
+
+@test "every tk_ function the README names is defined" {
+    local named defined f missing=""
+    named=$(grep -oE '\btk_[a-z_]+' "$TK_ROOT/README.md" | sort -u)
+    assert_list_nonempty "tk_ functions named in README" $named
+    defined=$(grep -hoE '^tk_[a-z_]+\(\)' "$TK_LIB"/*.sh | tr -d '()' | sort -u)
+    # Names the README documents as deliberately absent. tk_opt_fmt has a whole
+    # section explaining why it is not offered, and that explanation is more
+    # valuable than the symbol would be.
+    local negated="tk_opt_fmt tk_watch"
+    for f in $named; do
+        case " $negated " in *" $f "*) continue ;; esac
+        printf '%s\n' "$defined" | grep -qx "$f" || missing="$missing $f"
+    done
+    assert_eq "$missing" ""
+}
+
+@test "every make target the README names exists" {
+    local mk="$TK_ROOT/Makefile" t missing=""
+    assert_file "$mk"
+    # [a-z0-9-]+, or the pattern truncates `make bash32` to `bash` and reports a
+    # target that was never named.
+    for t in $(grep -oE 'make [a-z0-9-]+' "$TK_ROOT/README.md" | awk '{print $2}' | sort -u); do
+        grep -qE "^$t:" "$mk" || missing="$missing $t"
+    done
+    assert_eq "$missing" ""
+}
+
+@test "every tmux-toolkit subcommand the README names is dispatched" {
+    local cli="$TK_ROOT/bin/tmux-toolkit" c missing=""
+    assert_file "$cli"
+    for c in version doctor consumers; do
+        grep -qE "^\s+$c[|)]" "$cli" || missing="$missing $c"
+    done
+    assert_eq "$missing" ""
+}

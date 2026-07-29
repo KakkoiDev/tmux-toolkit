@@ -65,7 +65,15 @@ path stays small.
 | Entry | Modules |
 |---|---|
 | `lib/toolkit.sh` | `core tmux version opt log json sqlite config` |
-| `lib/toolkit-ui.sh` | the above plus `target fmt menu status hook sched notify lock identity harness` |
+| `lib/toolkit-ui.sh` | the above plus `lock menu notify` |
+
+**Not built yet**, and deliberately not listed above as if they were:
+`target.sh`, `fmt.sh`, `status.sh`, `hook.sh`, `sched.sh`, `identity.sh`,
+`harness.sh`. An earlier version of this table named all ten as though
+`toolkit-ui.sh` already carried them, which was documenting vapor: another
+session went looking for `toolkit-ui.sh` and found nothing at all. A contract
+test now asserts that every module either entry point names is present on disk,
+so this table cannot drift ahead of the code again.
 
 ## API
 
@@ -183,10 +191,17 @@ make bash32        # the tier that catches things: system bash 3.2
 make lint
 ```
 
-Four tiers: T1 unit against a fake tmux on `PATH`, T2 integration against
-`tmux -f /dev/null -L <socket>`, T3 nested-tmux plus `expect` for rendered menus
-(`display-menu` is a client overlay that `capture-pane` cannot see), and T4
-contract tests generated from the source.
+Two tiers exist: **T1** unit against a fake tmux on `PATH`, and **T2**
+integration against `tmux -f /dev/null -L <socket>`. Plus **T4**, contract tests
+generated from the source, in `tests/unit/contract.bats`.
+
+**T3 is not written.** It would be nested-tmux plus `expect`, and it is the only
+way to assert on a *rendered* menu, because `display-menu` is a client overlay
+that `capture-pane` cannot see. Until it exists, `menu.sh` is covered by
+asserting on the argument vector under `TK_MENU_DRYRUN=1` and by round-tripping
+`tk_menu_cmd`'s output through `sh`, which catches quoting regressions without a
+terminal but not layout ones. `tmux-worktree/tests/expect_helper.bash` is the
+implementation to lift when T3 is built.
 
 Every assertion is a function call, never a bare `[[ ]]` or `! cmd`: on bash 3.2
 neither trips `set -e` or the ERR trap unless it is the last statement of the
