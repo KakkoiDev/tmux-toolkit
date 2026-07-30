@@ -1,4 +1,4 @@
-.PHONY: help test test-unit test-integration lint bash32 checksum sync-check dist fanout version
+.PHONY: help test test-unit test-integration lint bash32 checksum sync-check dist dist-check release fanout version
 
 SHELL      := /bin/bash
 LIB_FILES  := $(shell find lib -name '*.sh' | sort)
@@ -14,6 +14,8 @@ help:
 	@printf '  make lint              shellcheck -S warning\n'
 	@printf '  make checksum          regenerate lib/.checksum\n'
 	@printf '  make sync-check        verify a vendored lib/ has not drifted\n'
+	@printf '  make dist-check        verify dist matches lib/ and is pushed\n'
+	@printf '  make release           checksum + dist, the only way to publish lib/\n'
 	@printf '  make fanout            subtree-pull + test + commit in every consumer\n'
 
 test: test-unit test-integration
@@ -76,6 +78,60 @@ dist:
 	@git rev-parse --verify -q refs/heads/dist >/dev/null && git branch -D dist >/dev/null || true
 	@git branch -f dist "$$(git subtree split --prefix=lib 2>/dev/null | tail -1)"
 	@printf 'dist = %s (%s)\n' "$$(git rev-parse --short dist)" '$(VERSION)'
+
+# dist-check: a stale `dist` is the worst thing this repo can ship, because
+# nothing errors. The first external consumer hit exactly this: `dist` was still
+# the 0.1.0 split, so `subtree add ... dist` vendored a lib/ with no
+# toolkit-ui.sh, that lib/ passed sync-check against its own stale .checksum, and
+# the first symptom was `tk_lock: command not found` from inside a hook hours
+# later. `make dist` existing was not enough; nothing made forgetting it visible.
+#
+# A tree comparison, not a re-split: `subtree split` walks the whole history and
+# sees only committed state, whereas `dist^{tree}` and `HEAD:lib` are literally
+# the same object id whenever dist is current. That is the invariant, and it costs
+# two rev-parses.
+#
+# The origin comparison is the half that matters in CI, since consumers install
+# from GitHub: an unpushed dist is a stale dist from their side. It is skipped
+# when there is no origin/dist ref rather than failing, because a fresh clone with
+# no fetched branches is not a broken release.
+dist-check:
+	@git rev-parse --verify -q refs/heads/dist >/dev/null \
+		|| { printf 'no dist branch; run `make release`\n' >&2; exit 1; }
+	@d=$$(git rev-parse 'dist^{tree}'); l=$$(git rev-parse 'HEAD:lib'); \
+	if [ "$$d" != "$$l" ]; then \
+		printf 'dist is stale: its tree does not match lib/ at HEAD\n' >&2; \
+		printf '  dist tree     %s\n  HEAD:lib tree %s\n' "$$d" "$$l" >&2; \
+		printf 'Run `make release`. Consumers subtree from dist, so a stale dist\n' >&2; \
+		printf 'vendors old code into every plugin and nothing errors.\n' >&2; \
+		exit 1; \
+	fi
+	@dv=$$(git show dist:VERSION 2>/dev/null); \
+	if [ "$$dv" != '$(VERSION)' ]; then \
+		printf 'dist VERSION is %s but lib/VERSION is %s\n' "$$dv" '$(VERSION)' >&2; \
+		exit 1; \
+	fi
+	@if git rev-parse --verify -q refs/remotes/origin/dist >/dev/null; then \
+		if [ "$$(git rev-parse dist)" != "$$(git rev-parse origin/dist)" ]; then \
+			printf 'dist is not pushed: origin/dist %s, local dist %s\n' \
+				"$$(git rev-parse --short origin/dist)" "$$(git rev-parse --short dist)" >&2; \
+			printf 'Consumers install from GitHub, so an unpushed dist is a stale dist.\n' >&2; \
+			exit 1; \
+		fi; \
+	else \
+		printf 'no origin/dist fetched; skipping the push comparison\n'; \
+	fi
+	@printf 'dist = %s (%s), matches lib/ and origin\n' "$$(git rev-parse --short dist)" '$(VERSION)'
+
+# release: the only sanctioned way to publish a lib/ change. Bumping lib/VERSION
+# by hand and committing is what left dist behind, so the checksum and the split
+# are regenerated together here and the push is spelled out rather than assumed.
+release: checksum dist
+	@printf '\nlib/VERSION = %s\ndist        = %s\n\n' \
+		'$(VERSION)' "$$(git rev-parse --short dist)"
+	@printf 'Now commit lib/.checksum if it changed, then:\n'
+	@printf '  git push origin main dist\n'
+	@printf 'CI runs `make dist-check`, which fails until dist is pushed.\n'
 
 # fanout: push this lib/ into every consumer listed in consumers.txt, running
 # that consumer's own suite before committing and stopping on the first red.

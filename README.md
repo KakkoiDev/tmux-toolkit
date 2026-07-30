@@ -18,7 +18,15 @@ git subtree add --prefix=lib https://github.com/KakkoiDev/tmux-toolkit.git dist 
 Note `dist`, not `main`. `dist` is a subtree split of this repo's `lib/`, so its
 root *is* the library and the consumer gets `lib/core.sh`. Pulling `main` instead
 puts the whole repo at `lib/`, giving you `lib/lib/core.sh` plus a copy of the
-tests and the Makefile. `make dist` regenerates the branch.
+tests and the Makefile.
+
+`make release` regenerates the branch and `make dist-check` asserts it matches
+`lib/` and is pushed. CI runs that check. It exists because the first external
+consumer ran the line above while `dist` was still the 0.1.0 split: they got a
+`lib/` with no `toolkit-ui.sh`, it passed `sync-check` against its own stale
+`.checksum`, and the first symptom was `tk_lock: command not found` from inside a
+hook hours later. Nothing errored at any point. After a subtree add, check
+`cat lib/VERSION` is the version you expected.
 
 Subtree and not submodule: a submodule leaves `lib/` empty on a plain
 `git clone`, and TPM does not `--recurse-submodules`, so every hook would break
@@ -211,6 +219,16 @@ one of them asserted a value the code had never written.
 Every generated list passes through `assert_list_nonempty` first. A T4 test whose
 extraction pattern matches nothing loops zero times and passes vacuously; that
 happened upstream and hid three dead options inside a 318-test suite.
+
+Same class, and worth knowing before you write your own fake tmux: **a stub that
+resolves options from its last argument silently breaks `tk_opt_bulk`.** `tk_opt`
+calls `show-option -gqv <key>`, so keying on `${!#}` looks right. `tk_opt_bulk`
+calls `show-options -g` with **no key** and greps the output by prefix, so that
+same stub answers `-g`, returns nothing, and every option falls back to its
+default while the tests that name those options keep passing. `tests/stub/tmux`
+here answers both forms; a consumer's own stub is where this bites. Reported by
+the first external consumer, who had two tests green this way and only caught it
+because one expected a value that differed from the default.
 
 ## Requirements
 

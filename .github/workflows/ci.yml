@@ -67,3 +67,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: make sync-check
+
+  # Consumers subtree from the `dist` branch, so a lib/ change that lands on main
+  # without a regenerated and pushed dist publishes nothing while appearing to
+  # publish. It is silent by construction: the stale lib/ validates against its
+  # own stale .checksum. This job is the only thing that makes forgetting visible.
+  #
+  # fetch-depth: 0 plus an explicit dist fetch, because dist shares no commits
+  # with main (it is a subtree split), so a shallow checkout of main cannot see it.
+  dist:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: fetch the dist branch
+        run: |
+          git fetch --no-tags origin '+refs/heads/dist:refs/remotes/origin/dist' || {
+            echo "no dist branch on origin yet" >&2; exit 1; }
+          git branch -f dist origin/dist
+      - run: make dist-check
