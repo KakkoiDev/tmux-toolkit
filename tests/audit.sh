@@ -47,8 +47,20 @@ report() {
 printf '%-5s %-6s %-56s %s\n' "ID" "STATE" "FINDING" "COUNT"
 printf '%-5s %-6s %-56s %s\n' "-----" "------" "$(printf '%.0s-' {1..56})" "-----"
 
-report V4  zero    "$(code_grep 'set-hook .*pane-died' "$MS/agent-mesh.tmux")" \
-    "mesh cleanup on pane-died, which never fires"
+# Two halves, because the fix both removes and adds. The old pattern was
+# `set-hook .*pane-died`, which now matches the `set-hook -gu "pane-died[N]"`
+# that *removes* the dead binding on upgrade, so the audit reported a fixed bug
+# as open. `-ga` is the registering form; `-gu` is the unsetting one.
+#
+# The positive half is not optional. `pane-exited` alone was the original
+# proposed fix and it is insufficient: measured on 3.5a, kill-pane fires only
+# after-kill-pane, kill-window only window-unlinked, and kill-session
+# session-closed. A probe that checked for any hook but pane-died would have
+# called that half-fix done.
+report V4  zero    "$(code_grep 'set-hook -ga[^"]*pane-died' "$MS/agent-mesh.tmux")" \
+    "mesh registers cleanup on pane-died, which never fires"
+report V4b nonzero "$(code_grep 'MESH_CLEANUP_HOOKS=.*pane-exited.*after-kill-pane.*window-unlinked.*session-closed' "$MS/agent-mesh.tmux")" \
+    "mesh cleanup covers every teardown hook, not just pane-exited"
 report V5  zero    "$(code_grep 'set-hook -g [a-z]' "$TR/agent-tracker.tmux")" \
     "tracker set-hook -g clobbers sibling plugins"
 report V6  zero    "$(code_grep 'mv "\$tmp"' "$TR/install.sh")" \
