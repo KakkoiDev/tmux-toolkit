@@ -94,6 +94,16 @@ Short form, in the order to do them:
 3. **D-0.5, the tmux server restart.** Independent of both, and the human's call.
    3.7b is linked; the running server is still 3.5a. Not urgent: the live server
    already picked up the four new mesh cleanup hooks.
+4. **Pane I/O layer (herdr gap).** `docs/herdr-pane-io-assessment.md` details
+   what herdr's `pane run` / `wait-output` / `agent prompt --wait` primitives do
+   that tmux-toolkit has no equivalent for. Priority order from that report:
+   (a) `tk_pane_send`/`tk_pane_run`/`tk_pane_key` — trivial wrappers
+   (b) `tk_pane_read` — capture-pane wrapper with source/line options
+   (c) **`tk_pane_wait`** — poll loop with timeout (critical gap)
+   (d) `tk_agent_prompt`/`tk_agent_wait` — agent-aware send+wait
+   (e) `tk_pane_metadata` — pane annotation system
+   Must live in `lib/toolkit-pane.sh` (separate from toolkit.sh — contract tests
+   grep for `send-keys` exclusion).
 
 ## Landmines, all verified on this machine
 

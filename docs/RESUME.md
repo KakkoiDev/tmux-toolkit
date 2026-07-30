@@ -274,6 +274,7 @@ to cost you an hour:
 | `docs/plan.md` | authoritative step list D-0..D-21, findings V1..V16, corrections C1..C8, open items H.1..H.9 |
 | `docs/remaining-work.md` | cold-read handoff: ground-truth table, the full landmine list, "do not do" |
 | `docs/agent-surface-assessment.md` | what an agent-facing CLI would need |
+| `docs/herdr-pane-io-assessment.md` | pane I/O comparison vs herdr: gaps, build plan, priority |
 | `docs/NG-report-agent-voice.md` | the first external consumer's findings NG-1..NG-5 |
 | `tests/audit.sh` | bug state, reproducible, greps code not prose |
 | `consumers.txt` | intended consumer list; `tmux-toolkit consumers` reports reality |
