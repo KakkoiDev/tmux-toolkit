@@ -1,11 +1,11 @@
 # Repos that vendor lib/ via git subtree. `make fanout` walks this list.
 # One path per line; ~ is expanded.
 #
-# This list is the intended set, not yet the actual one. Only tmux-agent-mesh has
-# a vendored lib/ today; the other four are D-2b. `make fanout` prints
-# "skip (lib/ not vendored yet)" for those rather than failing, so the list can
-# describe the target without breaking the target that walks it. Run
-# `tmux-toolkit consumers` for what is actually vendored and at which version.
+# All five vendor lib/, at 0.2.0, as of D-2b. This file is still only the
+# *intended* set: run `tmux-toolkit consumers` for the version each one actually
+# has, which is the check that matters. `make fanout` prints
+# "skip (lib/ not vendored yet)" for any entry that has not subtree-added yet,
+# rather than failing, so a sixth consumer can be listed here before it lands.
 ~/Code/tmux-agent-tracker
 ~/Code/tmux-agent-resumer
 ~/Code/tmux-agent-mesh

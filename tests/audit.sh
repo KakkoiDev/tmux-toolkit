@@ -78,6 +78,21 @@ report V15 zero    "$(ls "$MS"/internal/store/*.go 2>/dev/null | wc -l | tr -d '
 report C6  zero    "$(code_grep 'mv "\$tmp"' "$SO/uninstall.sh" "$WT/uninstall.sh")" \
     "uninstall mv breaks a symlinked tmux.conf"
 
+# NG-3, from the first external consumer. _load_config_fast sourced the config
+# cache with no staleness check, so no @agent-tracker-* option ever took effect
+# once the cache existed. Both halves are needed: the negative alone would pass on
+# a version that simply deleted the fast path, and the positive alone would pass on
+# one that called load_config *after* sourcing the cache.
+report NG3 zero    "$(code_grep 'source "\$_cc"' "$TR/scripts/tracker.sh")" \
+    "tracker sources its config cache without a staleness check"
+report NG3b nonzero "$(code_grep 'tk_config_load agent-tracker' "$TR/scripts/helpers.sh")" \
+    "tracker config loading goes through tk_config_load"
+
+# The socket fork this replaced was hand-copied eleven times in worktree, and
+# every copy was a place a later edit could touch one branch and not the other.
+report V16 zero    "$(code_grep 'tmux -L "?\$TMUX_SOCKET' "$WT/scripts/helpers.sh" "$WT/scripts/worktree_manager.sh" "$WT/worktrees.tmux")" \
+    "worktree hand-copies the -L TMUX_SOCKET fork per call site"
+
 # Vendoring status, informational rather than pass/fail.
 printf '\nvendored lib/ per consumer:\n'
 for d in "$TR" "$RS" "$MS" "$WT" "$SO"; do
