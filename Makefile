@@ -96,8 +96,17 @@ dist:
 # when there is no origin/dist ref rather than failing, because a fresh clone with
 # no fetched branches is not a broken release.
 dist-check:
-	@git rev-parse --verify -q refs/heads/dist >/dev/null \
-		|| { printf 'no dist branch; run `make release`\n' >&2; exit 1; }
+	@if ! git rev-parse --verify -q refs/heads/dist >/dev/null; then \
+		if git rev-parse --verify -q refs/remotes/origin/dist >/dev/null; then \
+			printf 'no local dist branch, but origin/dist exists.\n' >&2; \
+			printf 'A fresh clone creates no local branch for it. Run:\n' >&2; \
+			printf '  git branch dist origin/dist\n' >&2; \
+			printf 'Do NOT run `make release` here: it re-splits and would move dist.\n' >&2; \
+		else \
+			printf 'no dist branch and no origin/dist; run `make release`\n' >&2; \
+		fi; \
+		exit 1; \
+	fi
 	@d=$$(git rev-parse 'dist^{tree}'); l=$$(git rev-parse 'HEAD:lib'); \
 	if [ "$$d" != "$$l" ]; then \
 		printf 'dist is stale: its tree does not match lib/ at HEAD\n' >&2; \

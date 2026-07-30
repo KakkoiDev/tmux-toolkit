@@ -3,8 +3,16 @@
 Handoff state for the tmux toolkit extraction. Written to be executable cold,
 after a context reset, without re-reading the original plan.
 
-Original plan and the authoritative step list: `~/.claude/plans/we-have-powerful-tmux-eventual-sky.md`
-(steps D-0..D-21, corrections C1..C8, plus a dated status section at the top).
+**On a machine that has never seen this project, read `docs/RESUME.md` first.**
+It carries the clone layout, the prerequisites, the verification commands with
+their expected numbers, and the list of things that are machine-local and so are
+not regressions. This file assumes you are already set up.
+
+Authoritative step list: `docs/plan.md` (steps D-0..D-21, findings V1..V16,
+corrections C1..C8, open items H.1..H.9, plus a dated status section at the top).
+It used to live at `~/.claude/plans/we-have-powerful-tmux-eventual-sky.md`, which
+was outside every repo and therefore did not survive a machine change; it is now
+committed here.
 Agent-surface assessment: `docs/agent-surface-assessment.md`.
 Bug state, reproducible on demand: `tests/audit.sh`.
 First external consumer's findings: `docs/NG-report-agent-voice.md`.
@@ -66,10 +74,9 @@ harness.sh`. The README names them as unbuilt, and five contract tests in
 
 ## Next steps
 
-The authoritative list is the "Left to do" section of
-`~/.claude/plans/we-have-powerful-tmux-eventual-sky.md`. This file deliberately
-does not duplicate it, because two copies of a step list is how one of them goes
-stale and starts lying.
+The authoritative list is the "Left to do" section of `docs/plan.md`. This file
+deliberately does not duplicate it, because two copies of a step list is how one
+of them goes stale and starts lying.
 
 Short form, in the order to do them:
 

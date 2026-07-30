@@ -1,5 +1,11 @@
 # tmux-toolkit
 
+> **Picking up in-flight work?** Start at **[`docs/RESUME.md`](docs/RESUME.md)**.
+> It is written to be read cold on a machine that has never seen this project:
+> clone layout, prerequisites, the exact verification commands with their expected
+> numbers, where the work stopped, and what is machine-local and therefore not a
+> regression. [`docs/plan.md`](docs/plan.md) is the authoritative step list.
+
 Shared bash core for tmux plugins. Extracted from five plugins that had
 independently reimplemented the same plumbing 26 times.
 
