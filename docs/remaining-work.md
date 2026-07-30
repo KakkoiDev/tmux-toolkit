@@ -3,31 +3,50 @@
 Handoff state for the tmux toolkit extraction. Written to be executable cold,
 after a context reset, without re-reading the original plan.
 
-Original plan: `~/.claude/plans/we-have-powerful-tmux-eventual-sky.md` (steps
-D-0..D-21, plus corrections C1..C7 found during implementation).
+Original plan and the authoritative step list: `~/.claude/plans/we-have-powerful-tmux-eventual-sky.md`
+(steps D-0..D-21, corrections C1..C8, plus a dated status section at the top).
 Agent-surface assessment: `docs/agent-surface-assessment.md`.
 Bug state, reproducible on demand: `tests/audit.sh`.
+First external consumer's findings: `docs/NG-report-agent-voice.md`.
 
-## Ground truth as of 2026-07-29
+## Status 2026-07-30
+
+**Bugs: 0 open, 10 fixed.** Run `tests/audit.sh`.
+
+Done and pushed since the previous handoff: tmux 3.7b installed (server restart
+still pending, human's call); V4 fixed with a four-hook covering set and a
+debounce; `dist` pushed plus a `make dist-check` guard in CI; 532 bare `[[ ]]`
+assertions converted across three repos; and a new `_has_agent_child` bug fixed
+in tracker and resumer.
+
+**Only two steps remain, both large refactors: D-2b and D-4.** Both are specified
+in full in the plan file's "Left to do" section; that is the live copy, not this
+file.
+
+## Ground truth as of 2026-07-30
 
 | Repo | Tests | Published | lib/ vendored |
 |---|---|---|---|
-| `tmux-toolkit` | 189 unit + 20 integration | public, 0.2.0 | n/a (source) |
-| `tmux-agent-mesh` | 319/319 | public | **yes, 0.1.0** |
-| `tmux-agent-tracker` | 263/263 | public | no |
+| `tmux-toolkit` | 209 (189 unit + 20 integration) | public, 0.2.0, dist pushed | n/a (source) |
+| `tmux-agent-mesh` | 327/327 | public | **yes, 0.1.0 - needs re-pull** |
+| `tmux-agent-tracker` | 268/268 | public | no |
 | `tmux-agent-resumer` | 33/33 | public | no |
-| `tmux-worktree` | ~570 | public, 24 stars | no |
+| `tmux-worktree` | 493/493 (`make test`, not `bats tests/`) | public, 24 stars | no |
 | `tmux-session-order` | 12/12 | public | no |
 
-Every suite green on bash 5 **and** bash 3.2. `shellcheck -S warning` clean in
-toolkit, mesh, resumer, session-order, worktree. The tracker has 15 pre-existing
-warnings and no CI.
+Every suite green. `shellcheck -S warning` clean in toolkit, mesh, resumer,
+session-order, worktree. The tracker has 15 pre-existing warnings and no CI.
 
-**Bugs: 8 of 9 fixed.** Only V4 open. Run `tests/audit.sh` for current state.
+bats runs test bodies under `/bin/bash` 3.2.57 here, so every run above is already
+the bash 3.2 tier. **There is no bash 5 on this machine**; that tier exists only in
+CI. Also measured: a bare `[[ ]]` and a negated `! cmd` are inert mid-body on 3.2,
+but a bare `[ ]` is decisive, because `[[` is a compound command and errexit does
+not apply to it inside a function.
 
-**Environment still pending:** tmux is **3.5a**; an attempted 3.7b install did not
-take (`brew list --versions tmux` shows 3.5a only). Upgrading needs a server
-restart, which kills every live agent session, so it is the human's call.
+**Environment:** tmux **3.7b** is installed and linked; the running server is still
+**3.5a** (pid 9420 at time of writing). Upgrading needs a server restart, which
+kills every live agent session, so it is the human's call. Rollback is
+`ln -sf ../Cellar/tmux/3.5a/bin/tmux /opt/homebrew/bin/tmux`; the 3.5a keg is kept.
 
 ## Built in the toolkit
 
@@ -39,125 +58,19 @@ sqlite config`.
 harness.sh`. The README names them as unbuilt, and five contract tests in
 `tests/unit/contract.bats` fail if it ever claims otherwise.
 
-## Next steps, in order
+## Next steps
 
-### 1. V4 - mesh cleanup is bound to a hook that never fires
+**Two left: D-2b and D-4.** Both are specified in full, with per-plugin notes and
+the traps found vendoring mesh, in the "Left to do" section of
+`~/.claude/plans/we-have-powerful-tmux-eventual-sky.md`. That is the live copy;
+this file deliberately does not duplicate it, because two copies of a step list is
+how one of them goes stale and starts lying.
 
-`agent-mesh.tmux:66-68` registers cleanup on `pane-died`. That hook only fires
-when `remain-on-exit` is on, and it is off globally, so mesh's **only** cleanup
-path is dead code and dead agents linger in the roster forever.
-
-The fix is one word: `pane-exited`. It is not shipped because it needs a
-measurement first. `pane-exited` fires on **every** pane close server-wide, and
-`mesh.sh cleanup` does a full `list-panes -a` prune, so it becomes hot.
-
-Do:
-1. Measure `mesh.sh cleanup` wall time on a realistic roster. If it is cheap,
-   ship the rename alone.
-2. Otherwise debounce with `tk_config_fresh mesh-cleanup 2` before the prune.
-3. Regression test: register an agent on a pane running `sleep 100`,
-   `kill-pane`, assert the row is gone. **That test cannot pass today**, which is
-   why the bug survived 319 tests. It must fail on the current commit.
-4. Also drop the `pane-died` hook on upgrade, and fix `mesh.sh:1524`'s doctor
-   probe which checks for the old hook name.
-
-### 2. Convert the tracker's 476 bare `[[ ]]` assertions to functions
-
-On bash 3.2 a bare `[[ ]]` that is not the last statement of a bats body trips
-neither `set -e` nor the ERR trap, so only ~263 of the tracker's 476 assertions
-are load-bearing. **This is the mechanism that hid 11 bugs found this session.**
-
-A scratch-copy experiment currently reports 263/263 clean, so no known false
-assertion remains, but the suite will rot again silently.
-
-Do: vendor `tmux-toolkit/tests/assert.bash` into the tracker and convert
-mechanically. `tmux-agent-mesh/tests/helpers.bash` already does this and
-documents why. Mechanical, low risk.
-
-The experiment worth keeping as a tool:
-
-```sh
-# In a scratch copy, make every bare assertion decisive, then run the suite.
-python3 - <<'PY'
-import re,glob
-pat=re.compile(r'^(\s+)(\[\[ .* \]\])\s*(#.*)?$')
-for f in glob.glob('tests/*.bats'):
-    out=[]
-    for i,l in enumerate(open(f).read().split('\n'),1):
-        m=pat.match(l)
-        out.append(f"{m.group(1)}if ! {m.group(2)}; then printf 'BARE-FAIL %s:%d\\n' '{f}' {i} >&2; exit 1; fi" if m else l)
-    open(f,'w').write('\n'.join(out))
-PY
-```
-
-### 3. Investigate: tracker `SessionStart` creates no row
-
-`cmd_hook` says `SessionStart) ;; # _ensure_session already created as idle`, but
-in the bats environment `SessionStart` leaves **0 rows**; the row first appears on
-`UserPromptSubmit`. Verified pre-existing, identical before and after the V13
-change, tested both directions.
-
-If it also happens in production, an agent that starts and never prompts is
-invisible to the tracker. Likely cause: `_reap_dead` runs on `SessionStart` and
-deletes the fresh row because `_has_agent_child` finds no agent under the pane.
-Determine whether production is affected, and if so whether the reap should skip
-a row created in the same invocation.
-
-### 4. D-2b - vendor `lib/` into the remaining four plugins
-
-Mesh is done and is the worked example: see its `scripts/helpers.sh` (a shim) and
-commit `6b6942c`.
-
-```sh
-cd <plugin> && git subtree add --prefix=lib ~/Code/tmux-toolkit dist --squash
-```
-
-**`dist`, not `main`.** `dist` is a subtree split of `lib/`, so its root *is* the
-library. Pulling `main` gives you `lib/lib/core.sh` plus a copy of the tests.
-`make dist` regenerates it. Never `subtree split --rejoin`, which writes a merge
-commit back onto main and duplicates every release commit there.
-
-Gate: each repo's existing suite must pass **unchanged**.
-
-Per-plugin notes:
-
-- **tracker** - largest consumer. Needs `TK_TMUX_DISABLED` wired to its
-  `_SANDBOX` mode (`tracker.sh:90 _tmux` is exactly `tk_tmux`'s no-op path).
-  Its `helpers.sh` also holds `_agent_client_type`, which belongs with
-  `_has_agent_child` in a future `identity.sh`.
-- **resumer** - now unblocked, since `lock.sh` exists. Its `_try_lock`/`_unlock`
-  map onto `tk_lock`/`tk_unlock`, and it gains PID-validated stale stealing
-  instead of a flat 120s wait.
-- **worktree** - has **10 hand-copied `if [ -n "$TMUX_SOCKET" ]` forks** that all
-  collapse onto `tk_tmux` with `TK_SOCKET`. No Makefile `test` target that
-  `make fanout` can call; it has `test`, so check it works from fanout.
-- **session-order** - smallest. Its `get_opt` is a third dialect of
-  `get_tmux_option`.
-
-Two things learned doing mesh, which will recur:
-
-- A test fixture that writes the config cache must include the format marker
-  (`# tk-config v1 <ns>`), or the loader treats it as foreign and rebuilds it,
-  silently discarding everything planted.
-- A fake tmux must answer `show-options` (plural) as well as `show-option`.
-  Config loading now reads a whole namespace in one call, so a fake that knows
-  only the singular form reports every option unset and the suite quietly tests
-  defaults.
-
-### 5. D-4 - worktree menus emit TSV, and `menu.sh` renders them
-
-`worktree_manager.sh:560` is `eval "tmux display-menu -T '$title' $options"`, and
-ten awk scripts assemble that string with six layers of quoting
-(`awk/worktree_data.awk:47` is the worst). Rewrite the awk to emit **TSV data
-only** and build the args with `tk_menu_*`.
-
-This is the highest-regression-risk step in the whole plan and should go last
-among the refactors. Human re-verify: open all six screens, filter with a pattern
-containing a space and an apostrophe, switch to a branch whose worktree path
-contains a space.
-
-It also unblocks the agent surface, because the agent CLI then renders the same
-data instead of parsing menu-command strings.
+Short form: D-2b vendors `lib/` into tracker, resumer, worktree and session-order
+(`subtree add --prefix=lib ~/Code/tmux-toolkit dist --squash`, never `main`, never
+`--rejoin`), re-pulls mesh off 0.1.0, and folds in NG-3. D-4 rewrites worktree's
+ten awk scripts to emit TSV and renders them with `tk_menu_*`; it is the highest
+regression risk in the plan and goes last.
 
 ## Landmines, all verified on this machine
 
@@ -187,11 +100,41 @@ data instead of parsing menu-command strings.
 - `read -r x < file` returns non-zero at EOF with no trailing newline **even
   though it assigned x**. Do not treat its status as "no value".
 - A comment line starting with `# shellcheck` is parsed as a directive and fails
-  with SC1072.
+  with SC1072. Related and also real: a comment of `#`, then spaces, then a bare
+  `!` is read as a malformed shebang and fails with SC1115 and SC1128, so a prose
+  line like `#   ! true is inert` cannot be written that way.
 - `tracker.sh cmd_refresh` runs from `status-right` every status-interval and
   used to ATTACH a world-writable `/tmp` file into the real database. Now
   overridable and ownership-checked. Any future code that reads a shared `/tmp`
   path into production state needs the same guard.
+- **`ps -o comm` prints the executable as invoked, not its basename.** A bare PATH
+  invocation reports `claude`; an absolute one reports
+  `/opt/homebrew/bin/claude`. Any exact-match against a harness name must strip
+  the path first. A `comm` can also contain spaces
+  (`/Applications/Claude.app/.../Claude Helper (Renderer)` is running right now),
+  so it must be read as the rest of the line and never as an awk field.
+- **`pane-exited` does not fire on `kill-pane`.** Measured on 3.5a with
+  `remain-on-exit` off: a pane whose process exits fires `pane-exited`; `kill-pane`
+  fires only `after-kill-pane`; `kill-window` fires only `window-unlinked`;
+  `kill-session` fires `session-closed`; `pane-died` never fires at all. Any
+  "clean up when a pane goes away" hook needs all four names, and
+  `window-layout-changed` is the wrong fifth because it also fires on every split
+  and resize.
+- `set-hook -gu 'name[N]'` removes one entry of a hook array and tmux does **not**
+  renumber the survivors, so indices captured before a removal stay valid.
+- **zsh does not word-split an unquoted `$var`.** The Bash tool's shell here is
+  zsh, so a probe written as `for n in $names` iterates once with the whole string
+  and every `tmux set-hook` in it fails as one bogus option name. Two hook probes
+  reported "nothing fires" for this reason before the third was run under `bash`.
+  Write throwaway probes with `bash -s <<'SH'`.
+- Instrumenting a bare assertion as `if ! [[ A ]] || [[ B ]]` changes the meaning
+  of a compound: it parses as `(!A) || B`, not `!(A || B)`, and manufactures
+  failures the original line never had. Wrap the whole condition in `{ ...; }`.
+- In `[[ $x == *"2*"* ]]` the quoted middle is a **literal** substring even though
+  it contains a `*`; only the bare outer stars are wildcards. And the RHS of `=~`
+  must be quoted when it becomes a function argument, or the shell strips the
+  backslashes and `1!#\[default\]` silently turns `[default]` into a character
+  class.
 
 ## Do not do
 
