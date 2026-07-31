@@ -79,11 +79,10 @@ path stays small.
 | Entry | Modules |
 |---|---|
 | `lib/toolkit.sh` | `core tmux version opt log json sqlite config` |
-| `lib/toolkit-ui.sh` | the above plus `lock menu notify target fmt` |
+| `lib/toolkit-ui.sh` | the above plus `lock menu notify target fmt identity` |
 
 **Not built yet**, and deliberately not listed above as if they were:
-`status.sh`, `hook.sh`, `sched.sh`, `identity.sh`,
-`harness.sh`. An earlier version of this table named all ten as though
+`status.sh`, `hook.sh`, `sched.sh`, `harness.sh`. An earlier version of this table named all ten as though
 `toolkit-ui.sh` already carried them, which was documenting vapor: another
 session went looking for `toolkit-ui.sh` and found nothing at all. A contract
 test now asserts that every module either entry point names is present on disk,
