@@ -208,9 +208,11 @@ Short form, in the order to do them:
   headline (`set-hook -B` monitor hooks) is content scraping that
   `claude agents --json` already beats with an official API. Gate it behind
   `tk_vers_ge 3.8` if built at all.
-- Do not put `send-keys` in `lib/`. Mesh's whole thesis is that it never types
-  into a pane, pinned by a grep over its own tree, and it vendors this library. A
-  contract test enforces this.
+- Do not put `send-keys` outside `lib/toolkit-pane.sh`. Keystroke injection is
+  allowed exactly there - the opt-in pane I/O module only toolkit-ui.sh sources -
+  and nowhere else in `lib/`. Mesh's whole thesis is that it never types into a
+  pane, pinned by a grep over its own tree, and it vendors this library; the
+  contract test now allows send-keys only in toolkit-pane.sh.
 - Do not read `~/.claude/projects/**/*.jsonl`. The vendor documents the format as
   internal and unstable, and `CLAUDE_CONFIG_DIR` relocates it.
 - Do not ship a schema-migration ladder before a migration is needed. The

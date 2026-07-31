@@ -40,7 +40,7 @@ bash32:
 	fi
 
 lint:
-	shellcheck -S warning $(LIB_FILES) tests/stub/tmux bin/*
+	@shellcheck -S warning $(LIB_FILES) tests/stub/* bin/*
 
 # ── vendoring guards ─────────────────────────────────────────────────
 #

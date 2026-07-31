@@ -216,9 +216,11 @@ Violating any of these has already broken something once.
   `make fanout`. Editing in place is how 26 duplicates accumulated.
 - **`make fanout` pulls from `$(CURDIR)`**, the local toolkit checkout, so the
   toolkit must be cloned and its `dist` ref must exist first (section 2).
-- **Never put `send-keys` in `lib/`.** mesh's entire thesis is that it never types
-  into a pane, pinned by a grep over its own tree, and it vendors this library. A
-  contract test enforces it.
+- **`send-keys` lives only in `lib/toolkit-pane.sh`.** The pane I/O module is
+  opt-in (only toolkit-ui.sh sources it); nowhere else in `lib/` may reach
+  keystroke injection, because mesh's entire thesis is that it never types into a
+  pane, pinned by a grep over its own tree, and it vendors this library. The
+  contract test allows send-keys only in toolkit-pane.sh.
 - **Never read `~/.claude/projects/**/*.jsonl`.** The vendor documents the format
   as internal and unstable, and `CLAUDE_CONFIG_DIR` relocates it.
 - **Do not require tmux 3.8.** Unreleased, git-master only, and its headline

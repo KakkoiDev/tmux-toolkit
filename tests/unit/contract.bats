@@ -77,14 +77,19 @@ teardown() { tk_teardown; }
     assert_empty "$hits"
 }
 
-@test "send-keys appears nowhere in lib/" {
+@test "send-keys appears only in toolkit-pane.sh" {
     # tmux-agent-mesh's whole thesis is that it never types into a pane, pinned
-    # by tests/isolation.bats:74. It will vendor this library, so the guarantee
-    # has to hold here or that test becomes a lie after D-2. Keystroke injection
-    # lives in tmux-agent-resumer/scripts/keys.sh and nowhere else.
+    # by tests/isolation.bats:74, and it vendors this library - so keystroke
+    # injection must not be reachable from the hot set or the ui set, both of
+    # which the mesh sources. toolkit-pane.sh is the deliberate exception: an
+    # opt-in module only toolkit-ui.sh loads, and only a plugin that calls a
+    # pane function ever reaches it. Every other module, in particular the hot
+    # set that a hook sources ~12x per turn, must stay clean.
     local hits
-    hits=$(grep -rn 'send-keys' "$TK_LIB" || true)
+    hits=$(grep -rn 'send-keys' "$TK_LIB" | grep -v '/toolkit-pane.sh' || true)
     assert_empty "$hits"
+    # Non-vacuous: the exception module really does carry the primitives.
+    grep -q 'send-keys' "$TK_LIB/toolkit-pane.sh"
 }
 
 @test "no lib module emits DROP TABLE in code" {
@@ -170,14 +175,17 @@ teardown() { tk_teardown; }
 @test "every lib module the README names in the entry-point table exists" {
     local readme="$TK_ROOT/README.md" table mods m missing=""
     assert_file "$readme"
-    # The two table rows only; the "Not built yet" paragraph below them is
-    # allowed, and required, to name files that do not exist.
-    table=$(grep -E '^\| `lib/toolkit(-ui)?\.sh`' "$readme")
+    # The three entry-point table rows only; the "Not built yet" paragraph
+    # below them is allowed, and required, to name files that do not exist.
+    table=$(grep -E '^\| `lib/toolkit(-ui|-pane)?\.sh`' "$readme")
     assert_list_nonempty "entry-point table rows" $table
     mods=$(printf '%s' "$table" | grep -oE '`[a-z ]+`' | tr -d '`' | tr ' ' '\n' | sort -u)
     assert_list_nonempty "modules named in the table" $mods
     for m in $mods; do
-        case "$m" in ''|lib|toolkit|toolkit-ui|the|above|plus) continue ;; esac
+        case "$m" in
+            ''|lib|toolkit|toolkit-ui|the|above|plus) continue ;;
+            pane) m=toolkit-pane ;;  # the README calls the module `pane`; the file is toolkit-pane.sh
+        esac
         [[ -f "$TK_LIB/$m.sh" ]] || missing="$missing $m"
     done
     assert_eq "$missing" ""

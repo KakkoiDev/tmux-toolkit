@@ -1,0 +1,23 @@
+#!/bin/sh
+# ps stub for pane classification tests. The library classifies a pane's
+# process tree with `ps -eo pid=,ppid=,comm=` (a comm child-walk, see
+# lib/toolkit-pane.sh); this stub answers that one query from a fixture and
+# falls through to the real ps for everything else, so other tests and any
+# tooling on the stub PATH are unaffected.
+#
+# TK_PS_FIXTURE - file of lines "PID PPID COMM", written verbatim.
+# An unset or missing fixture file falls through to the real ps, which keeps
+# every test that does not classify (and every other test file) honest.
+
+case "$*" in
+    *"pid=,ppid=,comm="*)
+        if [ -n "${TK_PS_FIXTURE:-}" ] && [ -r "${TK_PS_FIXTURE:-}" ]; then
+            cat "$TK_PS_FIXTURE"
+            exit 0
+        fi
+        ;;
+esac
+
+real=$(PATH=$(printf '%s' "$PATH" | tr ':' '\n' | grep -v "$(dirname "$0")" | tr '\n' ':') command -v ps)
+[ -n "$real" ] && exec "$real" "$@"
+exit 0
