@@ -688,7 +688,7 @@ The trap is the point: a caller that returns early, or dies on `set -e`, still r
 tk_menu_cmd <script> [arg]... - a `run-shell` command string, quoted correctly.
 ```
 
-Single-quotes every word and escapes embedded single quotes the POSIX way ('\''), so a path with a space, an apostrophe or a dollar sign survives both the tmux parse and the shell parse.
+Single-quotes every shell word, then double-quotes the complete shell command as tmux's one run-shell argument. Embedded quotes, dollars and backslashes are escaped for the outer tmux parse.
 
 ### `tk_menu_count`
 

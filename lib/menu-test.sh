@@ -99,13 +99,16 @@ tk_menu_test_run() {
     local base=$(( idx * 3 ))
     local cmd="${TK_MENU_ARGS[$(( base + 2 ))]}"
 
-    # cmd is "run-shell '/path' 'arg1' ..." — strip the tmux part.
-    local shell_cmd="${cmd#run-shell }"
-    if [[ "$shell_cmd" == "$cmd" ]]; then
+    # Strip run-shell, then let the shell parse the single tmux argument back
+    # into the shell command that tmux would execute.
+    local tmux_arg="${cmd#run-shell }" shell_cmd=""
+    if [[ "$tmux_arg" == "$cmd" ]]; then
         _afail "tk_menu_test_run: item $idx has no run-shell command (got: '$cmd')"
         return 1
     fi
 
+    eval "set -- $tmux_arg"
+    shell_cmd="${1:-}"
     eval "$shell_cmd"
 }
 

@@ -57,16 +57,16 @@ teardown() { tk_teardown; }
 # ── quoting, the reason this module exists ───────────────────────────
 
 @test "tk_menu_cmd single-quotes every argument" {
-    assert_eq "$(tk_menu_cmd /bin/x switch main)" "run-shell '/bin/x' 'switch' 'main'"
+    assert_eq "$(tk_menu_cmd /bin/x switch main)" "run-shell \"'/bin/x' 'switch' 'main'\""
 }
 
 @test "tk_menu_cmd survives a path with a space" {
-    assert_eq "$(tk_menu_cmd "/my dir/x" arg)" "run-shell '/my dir/x' 'arg'"
+    assert_eq "$(tk_menu_cmd "/my dir/x" arg)" "run-shell \"'/my dir/x' 'arg'\""
 }
 
 @test "tk_menu_cmd survives an apostrophe" {
     # A branch called fix/don't-crash. POSIX '\'' is the only portable escape.
-    assert_eq "$(tk_menu_cmd /bin/x "fix/don't")" "run-shell '/bin/x' 'fix/don'\\''t'"
+    assert_eq "$(tk_menu_cmd /bin/x "fix/don't")" "run-shell \"'/bin/x' 'fix/don'\\\\''t'\""
 }
 
 @test "a command quoted by tk_menu_cmd is what sh actually runs" {
@@ -79,7 +79,8 @@ teardown() { tk_teardown; }
     local cmd
     cmd="$(tk_menu_cmd "$script" "fix/don't" "two words" 'a$b' 'c;d')"
     local got
-    got="$(eval "${cmd#run-shell }")"
+    eval "set -- ${cmd#run-shell }"
+    got="$(eval "$1")"
     assert_eq "$got" "[fix/don't][two words][a\$b][c;d]"
 }
 
@@ -107,11 +108,11 @@ teardown() { tk_teardown; }
 }
 
 @test "tk_menu_cmd does not expand a dollar sign" {
-    assert_contains "$(tk_menu_cmd /bin/x 'a$HOME')" 'a$HOME'
+    assert_eq "$(tk_menu_cmd /bin/x 'a$HOME')" "run-shell \"'/bin/x' 'a\\\$HOME'\""
 }
 
 @test "a semicolon in an argument cannot end the tmux command" {
-    assert_eq "$(tk_menu_cmd /bin/x 'a;kill-server')" "run-shell '/bin/x' 'a;kill-server'"
+    assert_eq "$(tk_menu_cmd /bin/x 'a;kill-server')" "run-shell \"'/bin/x' 'a;kill-server'\""
 }
 
 # ── pagination ───────────────────────────────────────────────────────

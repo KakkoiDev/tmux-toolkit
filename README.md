@@ -227,10 +227,10 @@ sourcing that file aborts the caller. A syntax error cannot be trapped.
 `tk_menu_title`, `tk_menu_item <label> <key> <command>`, `tk_menu_sep`,
 `tk_menu_text`, `tk_menu_quit`, `tk_menu_count`, and
 `tk_menu_show [extra tmux flags...]` build a `display-menu` call as an argument
-vector, so no layer ever hand-quotes a command string. `tk_menu_cmd <script>
-[arg]...` produces the `run-shell '...'` command string for a menu row, quoting
-every word POSIX-style so a space or an apostrophe survives both the tmux parse
-and the shell parse.
+vector. `tk_menu_cmd <script> [arg]...` produces a menu row's `run-shell`
+command: it POSIX-quotes every shell word, then wraps the complete command as
+tmux's single `run-shell` argument. Spaces, apostrophes, dollar signs and
+semicolons therefore survive both parsers without becoming extra tmux arguments.
 
 `tk_menu_show` suppresses `display-menu`'s exit 1 on dismiss (Esc, click-away):
 from a `run-shell` keybinding tmux would otherwise print `returned 1` in the
