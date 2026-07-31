@@ -8,10 +8,10 @@
 #   source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/lib/toolkit-ui.sh"
 #   tk_init agent-mesh "$MESH_DIR"
 #
-# Currently carries menu, lock and notify. target, fmt, hook, sched, status,
-# harness and identity are not written yet; this file is the list of what
-# exists, and a contract test asserts that every module it names is present, so
-# it cannot drift back into documenting something that is not there.
+# Currently carries lock, menu, notify, target, fmt, status and hook, with
+# sched and harness in the hot set. identity is not written yet; a contract
+# test asserts that every module an entry point names is present, so this
+# file cannot drift back into documenting something that is not there.
 
 if [[ -z "${TK_UI_LOADED:-}" ]]; then
     TK_UI_LOADED=1
@@ -34,6 +34,10 @@ if [[ -z "${TK_UI_LOADED:-}" ]]; then
     source "$_tk_ui_src/target.sh"
     # shellcheck source=fmt.sh
     source "$_tk_ui_src/fmt.sh"
+    # shellcheck source=status.sh
+    source "$_tk_ui_src/status.sh"
+    # shellcheck source=hook.sh
+    source "$_tk_ui_src/hook.sh"
 
     unset _tk_ui_src
 fi

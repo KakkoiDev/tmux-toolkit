@@ -41,6 +41,15 @@ if [[ -z "${TK_LOADED:-}" ]]; then
     source "$_tk_src/sqlite.sh"
     # shellcheck source=config.sh
     source "$_tk_src/config.sh"
+    # sched.sh is on the hook path deliberately: hooks schedule trailing
+    # passes (the debounce in C8 is a run-shell -b -d) and the only way to
+    # reach it from a hook is via the hot set. harness.sh rides along so an
+    # installer that sources toolkit.sh does not need a second file; nothing
+    # on a hook path calls it.
+    # shellcheck source=sched.sh
+    source "$_tk_src/sched.sh"
+    # shellcheck source=harness.sh
+    source "$_tk_src/harness.sh"
 
     unset _tk_src
 fi

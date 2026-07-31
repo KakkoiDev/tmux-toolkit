@@ -51,8 +51,11 @@ teardown() { tk_teardown; }
 
 @test "toolkit.sh sources only the hot set" {
     # A Claude hook fires ~12x per turn. The interactive and install-time
-    # modules must not be on that path.
-    local hot="core.sh tmux.sh version.sh opt.sh log.sh json.sh sqlite.sh config.sh"
+    # modules must not be on that path. sched is on it deliberately (hooks
+    # schedule trailing passes through tk_after) and harness rides along so
+    # an installer that sources toolkit.sh needs no second file; everything
+    # else interactive lives in toolkit-ui.sh.
+    local hot="core.sh tmux.sh version.sh opt.sh log.sh json.sh sqlite.sh config.sh sched.sh harness.sh"
     local sourced base
     sourced=$(grep -oE 'source "\$_tk_src/[a-z]+\.sh"' "$TK_LIB/toolkit.sh" | sed 's|.*/||; s|"||')
     # shellcheck disable=SC2086

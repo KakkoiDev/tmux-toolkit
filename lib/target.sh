@@ -85,10 +85,21 @@ tk_goto_pane() {
 # Does NOT echo back to stdout, unlike `list-panes -f ... | grep -qx`.
 # The empty-string case is explicitly false: grep -qx "" exits 0, so every
 # plugin's stored-target check would report a missing pane as alive.
+#
+# Two version realities are handled:
+#   * -a is mandatory: without it list-panes lists only the *current window*,
+#     so a stored target in any other window would look dead.
+#   * the -f server-side filter arrived in tmux 3.2; on the 3.0/3.1 floor
+#     the same check falls back to the `list-panes -a -F ... | grep -qx`
+#     shape this module replaces, which works everywhere.
 tk_pane_alive() {
     local pane_id="${1:-}"
     [[ -n "$pane_id" ]] || return 1
-    tk_tmux list-panes -f "#{==:#{pane_id},$pane_id}" -F '1' 2>/dev/null | grep -q 1
+    if tk_vers_ge 3.2; then
+        tk_tmux list-panes -a -f "#{==:#{pane_id},$pane_id}" -F '1' 2>/dev/null | grep -q 1
+    else
+        tk_tmux list-panes -a -F '#{pane_id}' 2>/dev/null | grep -qx "$pane_id"
+    fi
 }
 
 # tk_panes_alive <pane_id>... - true when every named pane id is alive.
