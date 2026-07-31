@@ -120,14 +120,30 @@ teardown() { tk_teardown; }
 @test "tk_pane_alive is true for a live pane" {
     # shellcheck source=../../lib/target.sh
     source "$TK_LIB/target.sh"
-    tk_fixture 'list-panes -f *' '1'
+    tk_fixture '-V' 'tmux 3.7b'
+    tk_fixture 'list-panes -a -f *' '1'
     tk_pane_alive "%4"
 }
 
 @test "tk_pane_alive is false for a dead pane" {
     # shellcheck source=../../lib/target.sh
     source "$TK_LIB/target.sh"
-    tk_fixture 'list-panes -f *' ''
+    tk_fixture '-V' 'tmux 3.7b'
+    tk_fixture 'list-panes -a -f *' ''
+    refute tk_pane_alive "%99"
+}
+
+@test "tk_pane_alive falls back to the grep shape below tmux 3.2" {
+    # -f for list-panes arrived in 3.2; on the 3.0/3.1 floor the check uses
+    # the list-panes -a -F | grep -qx shape this module replaces.
+    # shellcheck source=../../lib/target.sh
+    source "$TK_LIB/target.sh"
+    tk_fixture '-V' 'tmux 3.0a'
+    tk_fixture 'list-panes -a -F *' '%0
+%4'
+    tk_pane_alive "%4"
+    tk_fixture '-V' 'tmux 3.0a'
+    tk_fixture 'list-panes -a -F *' '%0'
     refute tk_pane_alive "%99"
 }
 
@@ -144,16 +160,18 @@ teardown() { tk_teardown; }
 @test "tk_panes_alive is true when every pane is alive" {
     # shellcheck source=../../lib/target.sh
     source "$TK_LIB/target.sh"
-    tk_fixture 'list-panes -f *' '1'
+    tk_fixture '-V' 'tmux 3.7b'
+    tk_fixture 'list-panes -a -f *' '1'
     tk_panes_alive "%1" "%4"
 }
 
 @test "tk_panes_alive fails on the first dead pane" {
     # shellcheck source=../../lib/target.sh
     source "$TK_LIB/target.sh"
+    tk_fixture '-V' 'tmux 3.7b'
     # First call returns 1 (alive), second returns empty (dead)
-    tk_fixture 'list-panes -f #{==:#{pane_id},%1}*' '1'
-    tk_fixture 'list-panes -f #{==:#{pane_id},%99}*' ''
+    tk_fixture 'list-panes -a -f #{==:#{pane_id},%1}*' '1'
+    tk_fixture 'list-panes -a -f #{==:#{pane_id},%99}*' ''
     refute tk_panes_alive "%1" "%99"
 }
 

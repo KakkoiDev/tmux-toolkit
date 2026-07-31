@@ -52,7 +52,7 @@ cmd_doctor() {
 
     printf '\nlibrary\n'
     local f missing=0
-    for f in core tmux version opt log json sqlite config; do
+    for f in core tmux version opt log json sqlite config sched harness; do
         [[ -r "$(tk_lib_dir)/$f.sh" ]] || { printf '  FAIL  lib/%s.sh missing\n' "$f"; missing=1; }
     done
     [[ "$missing" -eq 0 ]] && printf '  ok    hot-set modules present\n'

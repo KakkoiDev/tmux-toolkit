@@ -78,15 +78,16 @@ path stays small.
 
 | Entry | Modules |
 |---|---|
-| `lib/toolkit.sh` | `core tmux version opt log json sqlite config` |
-| `lib/toolkit-ui.sh` | the above plus `lock menu notify target fmt identity` |
+| `lib/toolkit.sh` | `core tmux version opt log json sqlite config sched harness` |
+| `lib/toolkit-ui.sh` | the above plus `lock menu notify target fmt identity status hook` |
 
-**Not built yet**, and deliberately not listed above as if they were:
-`status.sh`, `hook.sh`, `sched.sh`, `harness.sh`. An earlier version of this table named all ten as though
+**Not built yet**, and deliberately not listed above as if it were:
+`identity.sh` (the registry-based agent identity from section C of the plan).
+An earlier version of this table named all ten modules as though
 `toolkit-ui.sh` already carried them, which was documenting vapor: another
 session went looking for `toolkit-ui.sh` and found nothing at all. A contract
-test now asserts that every module either entry point names is present on disk,
-so this table cannot drift ahead of the code again.
+test now asserts that every module either entry point names is present on
+disk, so this table cannot drift ahead of the code again.
 
 ## API
 
@@ -166,6 +167,69 @@ literal), `tk_pane_target <pane_id>` (with dead-pane echo-back guard),
 `tk_fmt_fields <target> <sep> <field>...` (positional fields in one round trip),
 `tk_q <value>` (`#{q:}` sh-quoting via tmux with a bash fallback),
 `tk_pane_search <target> <pattern>` (`#{C/r:}` server-side content search).
+
+`tk_pane_alive` lists with `-a` (a pane in another window is still alive) and
+uses the `-f` server-side filter on tmux 3.2+, falling back to the
+`list-panes -a -F '#{pane_id}' | grep -qx` shape on the 3.0/3.1 floor where
+`-f` does not exist yet. The empty-string case is explicitly false, because
+`grep -qx ""` exits 0 and every plugin's stored-target check used to report a
+missing pane as alive.
+
+### hook
+
+`tk_hook_valid <name>`, `tk_hook_add <name> <cmd>`, `tk_hook_remove <name> <script-dir>`.
+
+Adds append with `-ga` behind a `grep -qF` guard: a bare `set-hook -g`
+REPLACES every handler on that hook, which is how the tracker's focus hooks
+silently deleted mesh's, worktree's and the user's handlers on every reload.
+The guard compares quote-stripped text, because tmux re-renders a stored
+command double-quoted no matter how it was passed, and a plain grep would
+miss a re-install that switched quoting. Names are validated per-name via
+`show-hooks -g <name>`: a bare `show-hooks -g` omits unset names, and an
+unknown name makes `set-hook` fail under `set -e` in the middle of a plugin
+load. Removal is index-aware (`set-hook -gu '<name>[<i>]'`), keyed on the
+script directory so another plugin's handlers on the same event survive.
+
+### sched
+
+`tk_after <secs> <cmd>`, `tk_jitter <max_secs>`.
+
+`tk_after` uses `run-shell -b -d <secs>` on tmux 3.2+ (a libevent timer on
+the server, no `sleep` child) and falls back to `( sleep <secs> && eval <cmd> ) &
+on the 3.0/3.1 floor. `tk_jitter` sleeps a random 0..max seconds using
+`$RANDOM`, which is present on bash 3.2. Sourced from the hot set because
+hooks schedule trailing passes through it.
+
+### status
+
+`tk_status_register <ns>`, `tk_status_set <ns> <value>`,
+`tk_status_engine_register [ns]`, `tk_status_strip <ns>`.
+
+One status engine, N plugin segments. Each plugin owns the `#{E:@<ns>-status}`
+token in `status-right` (added idempotently, deduped against legacy strings)
+and writes its segment with `tk_status_set`, which also fires
+`refresh-client -S` — the V14 fix: without it a badge waits for tmux's own
+status-interval, up to 15 seconds. The single `#(tmux-toolkit tick)` shellout
+is registered once and updates every plugin's option on the server cadence;
+`tk_status_strip` removes a segment and, when no other segment survives, the
+engine. `#{E:}` is deliberate: it expands the option's value *as a format*,
+so a segment can carry its own `#{...}` pieces, where a plain `#{@...}`
+renders them literally.
+
+### harness
+
+`tk_hooks_install <file> <cmd_prefix> <event:matcher>...`,
+`tk_hooks_remove <file> <cmd_prefix>`.
+
+The jq add-if-absent predicate that used to be hand-written five times inside
+the tracker's installer alone. Install writes one hook entry per
+`<event:matcher>` under `hooks[<event>]`, with command `"<cmd_prefix> <event>"`
+and the given matcher, and skips any command that already exists so a
+reinstall never accumulates duplicates. Remove drops every entry whose
+command starts with the prefix, pruning empty arrays and finally the `hooks`
+key. Both write through symlinks (`cat tmp > target`): a dotfiles-managed
+settings file is a symlink and `mv` over it replaces the link, silently
+detaching the real file (finding V6).
 
 ### config
 
