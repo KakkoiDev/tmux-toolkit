@@ -1,0 +1,220 @@
+#!/usr/bin/env bash
+# generate-api-docs.sh — generate docs/api.md from source comments.
+#
+# Parses two comment formats in lib/*.sh:
+#   1. Explicit:  # tk_func <signature> - <description>
+#   2. Existing:  # <func> <sig...>  (first line of a comment block above the
+#                  function definition that names the function)
+#
+# Functions with no preceding comment are still listed (signature = name).
+#
+# Idempotent: running it twice with the same sources produces identical output.
+set -euo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LIB_DIR="$(cd "$HERE/../lib" && pwd)"
+DOCS_DIR="$(cd "$HERE/../docs" && pwd)"
+US=$(printf '\037')
+
+# Ordered by appearance in toolkit.sh / toolkit-ui.sh.
+MODULE_ORDER=(
+    core tmux version opt log json sqlite config sched harness
+    lock menu notify target fmt toolkit-pane pane-ops menu-test
+    status identity hook
+)
+
+# ── collect all function definitions ─────────────────────────────────
+
+# Returns: module<US>func (one per line)
+all_functions() {
+    grep -nH '^tk_[a-z_]*()' "$LIB_DIR"/*.sh | while IFS=: read -r path line func; do
+        local base
+        base="$(basename "$path" .sh)"
+        func="${func%%()*}"
+        printf '%s%s%s\n' "$base" "$US" "$func"
+    done | sort -t"$US" -k1,1 -k2,2
+}
+
+# ── extract descriptions from comments ───────────────────────────────
+#
+# Returns: module<US>func<US>signature<US>description
+# Only for functions that have a documented comment block.
+
+extract_descriptions() {
+    local f base line prev_func="" prev_sig="" prev_desc="" in_desc=0
+
+    for f in "$LIB_DIR"/*.sh; do
+        base="$(basename "$f" .sh)"
+        prev_func=""; prev_sig=""; prev_desc=""; in_desc=0
+
+        while IFS= read -r line; do
+            # ── explicit tk_func marker ──
+            if [[ "$line" =~ ^#[[:space:]]*tk_func[[:space:]]+(.+)[[:space:]]*-[[:space:]]*(.*) ]]; then
+                local sig="${BASH_REMATCH[1]}"
+                local desc="${BASH_REMATCH[2]}"
+                local func="${sig%% *}"
+                desc="${desc#"${desc%%[![:space:]]*}"}"
+                desc="${desc%"${desc##*[![:space:]]}"}"
+                printf '%s%s%s%s%s%s%s\n' "$base" "$US" "$func" "$US" "$sig" "$US" "$desc"
+                prev_func=""; prev_sig=""; prev_desc=""; in_desc=0
+                continue
+            fi
+
+            # ── existing convention: # <func> <sig...> ──
+            # The first line of a comment block that names a tk_ function.
+            if [[ "$line" =~ ^#[[:space:]]*(tk_[a-z_]+)[[:space:]]+(.*) ]]; then
+                local cfunc="${BASH_REMATCH[1]}"
+                local csig="${BASH_REMATCH[1]} ${BASH_REMATCH[2]}"
+                csig="${csig%" "}"
+                prev_func="$cfunc"
+                prev_sig="$csig"
+                prev_desc=""
+                in_desc=1
+                continue
+            fi
+
+            # ── description continuation ──
+            if [[ "$in_desc" -eq 1 ]]; then
+                if [[ "$line" =~ ^#[[:space:]]*(.*) ]]; then
+                    local dtext="${BASH_REMATCH[1]}"
+                    case "$dtext" in
+                        "shellcheck shell="*) ;;
+                        "───"*|"━━━"*) ;;  # section dividers (em-dash variants)
+                        "") ;;  # blank comment line: separator
+                        *)
+                            if [[ -n "$prev_desc" ]]; then
+                                prev_desc="$prev_desc $dtext"
+                            else
+                                prev_desc="$dtext"
+                            fi
+                            ;;
+                    esac
+                    continue
+                fi
+            fi
+
+            # ── function definition: flush pending ──
+            if [[ "$line" =~ ^(tk_[a-z_]+)\(\) ]]; then
+                local defunc="${BASH_REMATCH[1]}"
+                if [[ "$in_desc" -eq 1 && "$prev_func" == "$defunc" ]]; then
+                    # Trim description to first sentence, clean up.
+                    local d="$prev_desc"
+                    d="${d#"${d%%[![:space:]]*}"}"
+                    d="${d%"${d##*[![:space:]]}"}"
+                    printf '%s%s%s%s%s%s%s\n' "$base" "$US" "$defunc" "$US" "$prev_sig" "$US" "$d"
+                fi
+                prev_func=""; prev_sig=""; prev_desc=""; in_desc=0
+                continue
+            fi
+
+            # ── non-comment line: reset ──
+            if [[ ! "$line" =~ ^# ]]; then
+                prev_func=""; prev_sig=""; prev_desc=""; in_desc=0
+            fi
+        done < "$f"
+    done
+}
+
+# ── generate markdown ────────────────────────────────────────────────
+
+generate_md() {
+    local tmp_funcs tmp_descs
+    tmp_funcs="$(mktemp)"
+    tmp_descs="$(mktemp)"
+
+    all_functions > "$tmp_funcs"
+    extract_descriptions > "$tmp_descs"
+
+    printf '# tmux-toolkit API Reference\n\n'
+    printf '> Auto-generated by `bin/generate-api-docs.sh`. Do not edit by hand.\n\n'
+
+    # Build module descriptions from the second line of each file.
+    local mod_descs=""
+    local base d
+    for f in "$LIB_DIR"/*.sh; do
+        base="$(basename "$f" .sh)"
+        d="$(head -2 "$f" | tail -1 | sed 's/^#[[:space:]]*//')" || true
+        [[ -n "$d" && "$d" != "shellcheck shell="* ]] || d="$base.sh"
+        mod_descs="$mod_descs$base$US$d"$'\n'
+    done
+
+    _mod_desc() {
+        local m="$1" line
+        while IFS= read -r line; do
+            [[ "$line" == "$m$US"* ]] && { printf '%s' "${line#$m$US}"; return 0; }
+        done <<< "$mod_descs"
+        printf '%s.sh' "$m"
+    }
+
+    _get_sig() {
+        # Look up signature+description for a function from tmp_descs.
+        # Output: sig<US>desc
+        local m="$1" f="$2"
+        grep "^$m$US$f$US" "$tmp_descs" 2>/dev/null | head -1 | cut -d"$US" -f3- || true
+    }
+
+    local mod seen_mods=""
+
+    # Emit modules in order.
+    for mod in "${MODULE_ORDER[@]}"; do
+        [[ -f "$LIB_DIR/$mod.sh" ]] || continue
+        local count
+        count="$(grep -c "^$mod$US" "$tmp_funcs" 2>/dev/null || printf 0)"
+        [[ "$count" -gt 0 ]] || continue
+
+        printf '## %s\n\n' "$(_mod_desc "$mod")"
+
+        while IFS="$US" read -r m func; do
+            [[ "$m" == "$mod" ]] || continue
+            local sd sig desc
+            sd="$(_get_sig "$mod" "$func")"
+            if [[ -n "$sd" ]]; then
+                sig="${sd%%$US*}"
+                desc="${sd#*$US}"
+            else
+                sig="$func"
+                desc=""
+            fi
+
+            printf '### `%s`\n\n' "$func"
+            printf '```\n%s\n```\n\n' "$sig"
+            [[ -n "$desc" ]] && printf '%s\n\n' "$desc" || printf '\n'
+        done < "$tmp_funcs"
+        seen_mods="$seen_mods $mod"
+    done
+
+    # Emit remaining modules alphabetically.
+    local remaining
+    remaining="$(cut -d"$US" -f1 "$tmp_funcs" | sort -u)"
+    for mod in $remaining; do
+        case " $seen_mods " in *" $mod "*) continue ;; esac
+        local count
+        count="$(grep -c "^$mod$US" "$tmp_funcs" 2>/dev/null || printf 0)"
+        [[ "$count" -gt 0 ]] || continue
+
+        printf '## %s\n\n' "$(_mod_desc "$mod")"
+
+        while IFS="$US" read -r m func; do
+            [[ "$m" == "$mod" ]] || continue
+            local sd sig desc
+            sd="$(_get_sig "$mod" "$func")"
+            if [[ -n "$sd" ]]; then
+                sig="${sd%%$US*}"
+                desc="${sd#*$US}"
+            else
+                sig="$func"
+                desc=""
+            fi
+
+            printf '### `%s`\n\n' "$func"
+            printf '```\n%s\n```\n\n' "$sig"
+            [[ -n "$desc" ]] && printf '%s\n\n' "$desc" || printf '\n'
+        done < "$tmp_funcs"
+    done
+
+    rm -f "$tmp_funcs" "$tmp_descs"
+}
+
+mkdir -p "$DOCS_DIR"
+generate_md > "$DOCS_DIR/api.md"
+printf 'Generated docs/api.md\n'

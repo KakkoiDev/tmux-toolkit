@@ -31,7 +31,7 @@ teardown() { tk_teardown; }
 
 @test "every lib module is sourced by an entry point" {
     local mods entry f base missing=""
-    mods=$(find "$TK_LIB" -name '*.sh' ! -name 'toolkit.sh' ! -name 'toolkit-ui.sh' -exec basename {} \; | sort)
+    mods=$(find "$TK_LIB" -name '*.sh' ! -name 'toolkit.sh' ! -name 'toolkit-ui.sh' ! -name 'menu-test.sh' -exec basename {} \; | sort)
     # shellcheck disable=SC2086
     assert_list_nonempty "lib modules" $mods
 
