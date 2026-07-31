@@ -15,19 +15,19 @@ teardown() { tk_teardown; }
 
 @test "info and debug are suppressed by default" {
     tk_info "chatter"
-    tk_debug "detail"
+    tk_log debug "detail"
     refute_file "$TK_LOG_FILE"
 }
 
 @test "DEBUG_LOG=1 turns on debug, matching the existing plugins" {
     DEBUG_LOG=1
-    tk_debug "detail"
+    tk_log debug "detail"
     assert_contains "$(cat "$TK_LOG_FILE")" "detail"
 }
 
 @test "DEBUG_LOG=0 leaves debug off" {
     DEBUG_LOG=0
-    tk_debug "detail"
+    tk_log debug "detail"
     refute_file "$TK_LOG_FILE"
 }
 

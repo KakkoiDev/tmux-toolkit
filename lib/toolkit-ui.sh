@@ -42,6 +42,10 @@ if [[ -z "${TK_UI_LOADED:-}" ]]; then
     source "$_tk_ui_src/hook.sh"
     # shellcheck source=status.sh
     source "$_tk_ui_src/status.sh"
+    # shellcheck source=test-session.sh
+    source "$_tk_ui_src/test-session.sh"
+    # shellcheck source=bug-report.sh
+    source "$_tk_ui_src/bug-report.sh"
     # shellcheck source=identity.sh
     source "$_tk_ui_src/identity.sh"
 

@@ -289,6 +289,88 @@ tk_opt_unset
 ```
 
 
+## debug.sh — structured JSON-line debug logging for every tk_* function.
+
+### `tk_debug`
+
+```
+tk_debug <func_name> <status> [detail] — general purpose.
+```
+
+status: OK, ERR, WARN
+
+### `tk_debug_clear`
+
+```
+tk_debug_clear — truncate the log (for tests).
+```
+
+
+### `tk_debug_err`
+
+```
+tk_debug_err <func_name> <detail> — called on failure.
+```
+
+
+### `tk_debug_event`
+
+```
+tk_debug_event <func_name> <status> [detail]
+```
+
+Appends one JSON line. Status: OK, ERR, WARN, TRACE. Rotation is sampled: checked roughly 1 write in 100.
+
+### `tk_debug_file`
+
+```
+tk_debug_file
+```
+
+
+### `tk_debug_ok`
+
+```
+tk_debug_ok <func_name> [detail] — called on success.
+```
+
+
+### `tk_debug_rotate`
+
+```
+tk_debug_rotate — rotate the debug log if it exceeds 1 MB.
+```
+
+Keeps the most recent ~512 KB (tail of the file).
+
+### `tk_debug_rotate_now`
+
+```
+tk_debug_rotate_now — force immediate rotation (for tests).
+```
+
+
+### `tk_debug_tail`
+
+```
+tk_debug_tail [n] — print the last n log entries (default 20).
+```
+
+
+### `tk_debug_trace`
+
+```
+tk_debug_trace <func_name> — called at function entry.
+```
+
+
+### `tk_debug_warn`
+
+```
+tk_debug_warn <func_name> [detail] — called on warning.
+```
+
+
 ## log.sh - leveled, self-trimming log.
 
 ### `tk_debug`
@@ -1115,6 +1197,57 @@ tk_window_rename_silent <target> <name>
 
 ## menu-test.sh — structural menu assertions without opening a real menu.
 
+### `tk_menu_chain`
+
+```
+tk_menu_chain "run-shell '/path/voice.sh toggle-enabled'" "$0 menu"
+```
+
+
+### `tk_menu_sim_close`
+
+```
+tk_menu_sim_close — simulate dismissing the menu (Escape).
+```
+
+
+### `tk_menu_sim_info`
+
+```
+tk_menu_sim_info — print the current sim state (session, title) to stdout.
+```
+
+
+### `tk_menu_sim_open`
+
+```
+tk_menu_sim_open <title> <item>...
+```
+
+Open a display-menu in an isolated test session. Items are passed as triplets: "label" "key" "command". Returns the socket path on stdout so the caller can use other tk_test_* functions against it. Example: socket=$(tk_menu_sim_open "Test" "Run" "r" "run-shell 'echo hi'" "Quit" "q" "")
+
+### `tk_menu_sim_select`
+
+```
+tk_menu_sim_select <key> — simulate pressing a key in the current menu.
+```
+
+In a real menu, the user presses the key. In the sim, we send the key to the test session's active pane. Since display-menu captures the keyboard, this actually works in the PTY context.
+
+### `tk_menu_sim_socket`
+
+```
+tk_menu_sim_socket — return the current simulation socket, or empty.
+```
+
+
+### `tk_menu_sim_type`
+
+```
+tk_menu_sim_type <text> — simulate typing text into a menu prompt.
+```
+
+
 ### `tk_menu_test_add`
 
 ```
@@ -1222,6 +1355,137 @@ tk_status_strip <ns> - remove a registered segment.
 ```
 
 Removes the `#{E:@<ns>-status}` token and unsets the option. When no #{E:@...} segment survives, the engine is removed too, so an uninstall that leaves no toolkit segment does not leave a dead #() ticking on every interval. Other plugins' #() (e.g. tmux-continuum's) are not ours and are never touched.
+
+## test-session.sh — isolated tmux sessions for automated testing.
+
+### `tk_test_capture`
+
+```
+tk_test_capture <socket> [target] — capture pane content.
+```
+
+Captures the visible screen (no scrollback by default, matching the headless test convention where nothing scrolls).
+
+### `tk_test_capture_full`
+
+```
+tk_test_capture_full <socket> [target] — capture with full scrollback.
+```
+
+
+### `tk_test_exec`
+
+```
+tk_test_exec <socket> <cmd> — run a shell command in the test session.
+```
+
+Uses run-shell so the command runs inside tmux's environment. Returns tmux's exit status.
+
+### `tk_test_menu`
+
+```
+tk_test_menu "$sock" "Test" "Run" "r" "run-shell 'echo hi'" "Quit" "q" ""
+```
+
+
+### `tk_test_pane_count`
+
+```
+tk_test_pane_count <socket> — number of panes in the test session.
+```
+
+
+### `tk_test_send_key`
+
+```
+tk_test_send_key <socket> <key> — send a key to the test session's active pane.
+```
+
+Key names follow tmux conventions: Enter, Escape, C-c, etc. Text is sent literally via -l.
+
+### `tk_test_session_cleanup`
+
+```
+tk_test_session_cleanup — kill all tracked test sessions.
+```
+
+Called automatically via trap; also callable directly.
+
+### `tk_test_session_exists`
+
+```
+tk_test_session_exists <socket> <name> — true when a session exists.
+```
+
+
+### `tk_test_session_start`
+
+```
+tk_test_session_start [name] — start a detached test session.
+```
+
+Prints the socket name (test-<timestamp>) on stdout. The session runs completely headless with -f /dev/null to avoid loading the developer's personal tmux config. The socket path includes the test tmpdir for automatic cleanup. A keepalive session on the same socket prevents the server from exiting when the test session is killed.
+
+### `tk_test_session_stop`
+
+```
+tk_test_session_stop <socket> — kill the server on this socket.
+```
+
+
+## bug-report.sh — automatic bug report generation when a tk_* function fails.
+
+### `tk_bug_dir`
+
+```
+tk_bug_dir
+```
+
+
+### `tk_bug_env`
+
+```
+tk_bug_env — capture a minimal environment snapshot.
+```
+
+
+### `tk_bug_report`
+
+```
+tk_bug_report <fn> <detail> [intention]
+```
+
+Writes a markdown bug report to $TK_DIR/bugs/<timestamp>.md. Captures: - Function that failed - What it was trying to do - Environment (tmux version, OS, session/window/pane state) - Last 20 debug log entries - Suggested causes - Stack trace (calling function chain)
+
+### `tk_bug_stack`
+
+```
+tk_bug_stack — print a calling function chain (bash call stack).
+```
+
+
+### `tk_crash_handler`
+
+```
+tk_crash_handler — trap ERR to auto-generate bug reports on crashes.
+```
+
+Usage: trap tk_crash_handler ERR When a command fails under `set -e`, this generates a bug report with the last failed command and the call stack.
+
+### `tk_crash_handler_install`
+
+```
+tk_crash_handler_install — install the ERR trap.
+```
+
+Safe to call multiple times: only installs once. Returns the previous trap so the caller can chain it.
+
+### `tk_crash_handler_remove`
+
+```
+tk_crash_handler_remove — remove the ERR trap, restoring any previous.
+```
+
 
 ## identity.sh - registry-based agent identity for tmux-toolkit.
 

@@ -154,6 +154,10 @@ tk_teardown_real() {
 # tk_skip_no_tmux - integration tiers are skipped, not failed, without tmux.
 tk_skip_no_tmux() {
     command -v tmux >/dev/null 2>&1 || skip "tmux not installed"
+    # If the stub tmux is being used (T1 tier), skip real-tmux tests.
+    if [[ "$(command -v tmux)" == "$TK_STUB_DIR/tmux" ]]; then
+        skip "stub tmux in use; real tmux required for this test"
+    fi
 }
 
 # tk_fixture <glob> <stdout> [exit] - teach the stub one answer.

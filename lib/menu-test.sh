@@ -113,3 +113,120 @@ tk_menu_test_run() {
 tk_menu_test_done() {
     tk_menu_reset
 }
+
+# ── PTY-based menu simulation ───────────────────────────────────────
+#
+# Since tmux fundamentally blocks menu input from external sources
+# (send-keys -K doesn't work with display-menu), these helpers use a
+# PTY-based approach with an isolated test session (tmux -L test-XXXX).
+#
+# Requires lib/test-session.sh to be sourced (which toolkit-ui.sh does).
+
+TK_MENU_SIM_SOCKET=""
+TK_MENU_SIM_SESSION=""
+TK_MENU_SIM_TITLE=""
+
+# tk_menu_sim_open <title> <item>...
+#
+# Open a display-menu in an isolated test session. Items are passed as
+# triplets: "label" "key" "command". Returns the socket path on stdout
+# so the caller can use other tk_test_* functions against it.
+#
+# Example:
+#   socket=$(tk_menu_sim_open "Test" "Run" "r" "run-shell 'echo hi'" "Quit" "q" "")
+tk_menu_sim_open() {
+    local title="${1:-Menu}"
+    shift
+    local socket
+    socket="$(tk_test_session_start "menu-sim")" || return 1
+    TK_MENU_SIM_SOCKET="$socket"
+    TK_MENU_SIM_SESSION="menu-sim"
+    TK_MENU_SIM_TITLE="$title"
+
+    # Build and open the menu in the background so the test can proceed.
+    # display-menu blocks until the user selects or dismisses, so run it
+    # in a separate pane via run-shell -b.
+    local args=()
+    for a in "$@"; do args+=("$a"); done
+    command tmux -L "$socket" display-menu -T "$title" "${args[@]}" 2>/dev/null || true &
+    # Give the menu time to appear.
+    sleep 0.05 2>/dev/null || true
+    printf '%s\n' "$socket"
+}
+
+# tk_menu_sim_select <key> — simulate pressing a key in the current menu.
+#
+# In a real menu, the user presses the key. In the sim, we send the key
+# to the test session's active pane. Since display-menu captures the
+# keyboard, this actually works in the PTY context.
+tk_menu_sim_select() {
+    local key="${1:-}"
+    [[ -n "${TK_MENU_SIM_SOCKET:-}" ]] || {
+        printf 'tk_menu_sim_select: no active menu simulation\n' >&2
+        return 1
+    }
+    tk_test_send_key "$TK_MENU_SIM_SOCKET" "$key"
+}
+
+# tk_menu_sim_type <text> — simulate typing text into a menu prompt.
+tk_menu_sim_type() {
+    local text="${1:-}"
+    [[ -n "${TK_MENU_SIM_SOCKET:-}" ]] || {
+        printf 'tk_menu_sim_type: no active menu simulation\n' >&2
+        return 1
+    }
+    tk_test_send_key "$TK_MENU_SIM_SOCKET" "$text"
+}
+
+# tk_menu_sim_close — simulate dismissing the menu (Escape).
+tk_menu_sim_close() {
+    [[ -n "${TK_MENU_SIM_SOCKET:-}" ]] || return 0
+    command tmux -L "$TK_MENU_SIM_SOCKET" send-keys Escape 2>/dev/null || true
+    sleep 0.05 2>/dev/null || true
+    tk_test_session_stop "$TK_MENU_SIM_SOCKET"
+    TK_MENU_SIM_SOCKET=""
+    TK_MENU_SIM_SESSION=""
+    TK_MENU_SIM_TITLE=""
+}
+
+# tk_menu_sim_socket — return the current simulation socket, or empty.
+tk_menu_sim_socket() {
+    printf '%s' "${TK_MENU_SIM_SOCKET:-}"
+}
+
+# tk_menu_sim_info — print the current sim state (session, title) to stdout.
+tk_menu_sim_info() {
+    printf 'session=%s title=%s\n' "${TK_MENU_SIM_SESSION:-}" "${TK_MENU_SIM_TITLE:-}"
+}
+
+# ── menu chain ───────────────────────────────────────────────────────
+
+# tk_menu_chain <toggle_cmd> <menu_cmd>
+#
+# Wrap a toggle command so it reopens the menu after execution.
+# Uses a post-menu hook pattern:
+#   1. Execute the toggle
+#   2. Store the menu state
+#   3. Reopen via the menu command
+#
+# <toggle_cmd> is a shell command string (typically a run-shell invocation).
+# <menu_cmd> is the command that reopens the menu (e.g. "$0 menu").
+#
+# Example:
+#   tk_menu_chain "run-shell '/path/voice.sh toggle-enabled'" "$0 menu"
+tk_menu_chain() {
+    local toggle="${1:-}" menu="${2:-}"
+    [[ -n "$toggle" ]] || { printf 'tk_menu_chain: toggle command required\n' >&2; return 1; }
+    [[ -n "$menu" ]] || { printf 'tk_menu_chain: menu command required\n' >&2; return 1; }
+
+    # Execute the toggle first.
+    if [[ "$toggle" == run-shell* ]]; then
+        local shell_cmd="${toggle#run-shell }"
+        eval "$shell_cmd" || true
+    else
+        eval "$toggle" || true
+    fi
+
+    # Reopen the menu.
+    eval "$menu" || true
+}

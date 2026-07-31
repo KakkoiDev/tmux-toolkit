@@ -35,6 +35,10 @@ if [[ -z "${TK_LOADED:-}" ]]; then
     source "$_tk_src/opt.sh"
     # shellcheck source=log.sh
     source "$_tk_src/log.sh"
+    # shellcheck source=debug.sh
+    # Sourced after log.sh so its tk_debug (structured JSON) overrides
+    # log.sh's tk_debug (plaintext alias for tk_log debug).
+    source "$_tk_src/debug.sh"
     # shellcheck source=json.sh
     source "$_tk_src/json.sh"
     # shellcheck source=sqlite.sh

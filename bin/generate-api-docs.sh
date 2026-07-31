@@ -18,9 +18,9 @@ US=$(printf '\037')
 
 # Ordered by appearance in toolkit.sh / toolkit-ui.sh.
 MODULE_ORDER=(
-    core tmux version opt log json sqlite config sched harness
+    core tmux version opt debug log json sqlite config sched harness
     lock menu notify target fmt toolkit-pane pane-ops menu-test
-    status identity hook
+    status test-session bug-report identity hook
 )
 
 # ── collect all function definitions ─────────────────────────────────
