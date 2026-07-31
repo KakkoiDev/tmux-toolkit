@@ -79,10 +79,10 @@ path stays small.
 | Entry | Modules |
 |---|---|
 | `lib/toolkit.sh` | `core tmux version opt log json sqlite config` |
-| `lib/toolkit-ui.sh` | the above plus `lock menu notify` |
+| `lib/toolkit-ui.sh` | the above plus `lock menu notify target fmt` |
 
 **Not built yet**, and deliberately not listed above as if they were:
-`target.sh`, `fmt.sh`, `status.sh`, `hook.sh`, `sched.sh`, `identity.sh`,
+`status.sh`, `hook.sh`, `sched.sh`, `identity.sh`,
 `harness.sh`. An earlier version of this table named all ten as though
 `toolkit-ui.sh` already carried them, which was documenting vapor: another
 session went looking for `toolkit-ui.sh` and found nothing at all. A contract
@@ -155,6 +155,18 @@ first into the second.
 Encoding is `major*1000 + minor`. jaclu/tmux-menus' concatenated-digit trick
 makes 3.10 → 310 and 3.9 → 39 and therefore reports 3.9 > 3.10; its `next-`
 handling and memoization are worth having, its integer encoding is not.
+
+### target, fmt
+
+`TK_TARGET_FMT` (the canonical `#{session_name}:#{window_index}.#{pane_index}`
+literal), `tk_pane_target <pane_id>` (with dead-pane echo-back guard),
+`tk_target_split <target>`, `tk_goto <target>`, `tk_goto_pane <pane_id>`,
+`tk_pane_alive <pane_id>`, `tk_panes_alive <pane_id>...`.
+
+`tk_fmt <target> <format>` (one `display-message -p`),
+`tk_fmt_fields <target> <sep> <field>...` (positional fields in one round trip),
+`tk_q <value>` (`#{q:}` sh-quoting via tmux with a bash fallback),
+`tk_pane_search <target> <pattern>` (`#{C/r:}` server-side content search).
 
 ### config
 
