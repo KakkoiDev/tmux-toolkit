@@ -181,6 +181,30 @@ unconditionally, so a live `tmux set -g @ns-option value` never took effect.
 verified on bash 3.2 and 5.3, `printf 'V=(a b\n' > f; bash -n f` exits **0**, and
 sourcing that file aborts the caller. A syntax error cannot be trapped.
 
+### menu
+
+`tk_menu_title`, `tk_menu_item <label> <key> <command>`, `tk_menu_sep`,
+`tk_menu_text`, `tk_menu_quit`, `tk_menu_count`, and
+`tk_menu_show [extra tmux flags...]` build a `display-menu` call as an argument
+vector, so no layer ever hand-quotes a command string. `tk_menu_cmd <script>
+[arg]...` produces the `run-shell '...'` command string for a menu row, quoting
+every word POSIX-style so a space or an apostrophe survives both the tmux parse
+and the shell parse.
+
+`tk_menu_show` suppresses `display-menu`'s exit 1 on dismiss (Esc, click-away):
+from a `run-shell` keybinding tmux would otherwise print `returned 1` in the
+status bar as if the menu had failed.
+
+Two flags exist for debugging and for the test suite:
+
+- `TK_MENU_DRYRUN=1` prints one argument per line instead of calling tmux. That
+  is the unit-test seam: `display-menu` is a client overlay that
+  `capture-pane` cannot see, so asserting on the argument vector is what catches
+  a quoting regression without a terminal.
+- `TK_MENU_DEBUG=1` prints the full `display-menu` invocation to stderr before
+  running it, each argument POSIX-quoted so the line can be copy-pasted back
+  into a shell to reproduce the menu by hand.
+
 ### log, json, sqlite
 
 `tk_log <level> <msg>` with `tk_error/warn/info/debug`. Honours `DEBUG_LOG=0|1`

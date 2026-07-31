@@ -140,6 +140,23 @@ teardown() { tk_teardown; }
     assert_empty "$hits"
 }
 
+@test "a dismissed menu is not an error" {
+    # display-menu exits 1 when the user dismisses without selecting (Esc,
+    # click-away). From a run-shell keybinding tmux then prints "returned 1"
+    # in the status bar, which reads as a failure. Contract: tk_menu_show must
+    # never propagate that 1. The stub is taught to answer 1 for every
+    # display-menu, and tk_menu_show must still return success.
+    unset TK_UI_LOADED
+    # shellcheck source=../lib/toolkit-ui.sh
+    source "$TK_LIB/toolkit-ui.sh"
+    tk_fixture 'display-menu *' '' 1
+    tk_menu_title T
+    tk_menu_item a 1 c
+    run tk_menu_show
+    assert_ok
+    assert_called 'display-menu -T T a 1 c'
+}
+
 @test "lib/VERSION is a semver triple" {
     assert_match "$(tk_lib_version)" '[0-9]*.[0-9]*.[0-9]*'
     refute_contains "$(tk_lib_version)" " "

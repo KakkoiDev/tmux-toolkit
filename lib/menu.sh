@@ -14,6 +14,7 @@
 
 TK_MENU_ARGS=()
 TK_MENU_TITLE=""
+TK_MENU_DEBUG="${TK_MENU_DEBUG:-0}"
 
 tk_menu_reset() { TK_MENU_ARGS=(); TK_MENU_TITLE=""; }
 
@@ -61,6 +62,9 @@ tk_menu_count() { printf '%s' "$(( ${#TK_MENU_ARGS[@]} / 3 ))"; }
 # the only unit-test seam available, because display-menu is a client overlay and
 # capture-pane cannot see it; asserting on the argument vector is what catches a
 # quoting regression without a terminal.
+# TK_MENU_DEBUG=1 prints the full display-menu invocation to stderr before
+# running it, each argument POSIX-quoted so a developer can copy-paste the line
+# back into a shell to reproduce the menu without a terminal.
 tk_menu_show() {
     local args=()
     [[ -n "$TK_MENU_TITLE" ]] && args+=(-T "$TK_MENU_TITLE")
@@ -71,7 +75,24 @@ tk_menu_show() {
         printf '%s\n' "${args[@]}"
         return 0
     fi
-    tk_tmux display-menu "${args[@]}"
+
+    if [[ "${TK_MENU_DEBUG:-0}" == "1" ]]; then
+        # One argument per word, quoted the same POSIX way tk_menu_cmd does.
+        # Joining with plain spaces would silently merge a label that contains
+        # a space into two arguments - the exact class of bug this module
+        # exists to catch.
+        local dbg="" w esc q="'"
+        for w in "${args[@]}"; do
+            esc="${w//$q/$q\\$q$q}"
+            dbg="$dbg '$esc'"
+        done
+        printf 'DEBUG display-menu:%s\n' "$dbg" >&2
+    fi
+
+    # display-menu exits 1 when the user dismisses the menu without selecting
+    # (Esc, click-away). From a run-shell keybinding, tmux then prints
+    # "returned 1" in the status bar as if the command had failed. It did not.
+    tk_tmux display-menu "${args[@]}" || true
 }
 
 # ── pagination ───────────────────────────────────────────────────────

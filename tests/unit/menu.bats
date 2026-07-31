@@ -83,6 +83,29 @@ teardown() { tk_teardown; }
     assert_eq "$got" "[fix/don't][two words][a\$b][c;d]"
 }
 
+@test "tk_menu_cmd round-trips a simple command through sh -n" {
+    # A quoting regression can be a syntax error before it is a wrong argv;
+    # sh -n catches that on the raw string, no terminal or tmux required.
+    local cmd="$TEST_TMPDIR/cmd-simple.sh"
+    printf '%s\n' "$(tk_menu_cmd my-script.sh toggle)" > "$cmd"
+    run sh -n "$cmd"
+    assert_ok
+}
+
+@test "tk_menu_cmd round-trips a path with spaces through sh -n" {
+    local cmd="$TEST_TMPDIR/cmd-space.sh"
+    printf '%s\n' "$(tk_menu_cmd "/path/with spaces/script.sh" arg)" > "$cmd"
+    run sh -n "$cmd"
+    assert_ok
+}
+
+@test "tk_menu_cmd round-trips an apostrophe through sh -n" {
+    local cmd="$TEST_TMPDIR/cmd-quote.sh"
+    printf '%s\n' "$(tk_menu_cmd script.sh "it's")" > "$cmd"
+    run sh -n "$cmd"
+    assert_ok
+}
+
 @test "tk_menu_cmd does not expand a dollar sign" {
     assert_contains "$(tk_menu_cmd /bin/x 'a$HOME')" 'a$HOME'
 }
