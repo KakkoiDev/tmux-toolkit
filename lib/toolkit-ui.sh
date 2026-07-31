@@ -30,6 +30,10 @@ if [[ -z "${TK_UI_LOADED:-}" ]]; then
     source "$_tk_ui_src/menu.sh"
     # shellcheck source=notify.sh
     source "$_tk_ui_src/notify.sh"
+    # shellcheck source=target.sh
+    source "$_tk_ui_src/target.sh"
+    # shellcheck source=fmt.sh
+    source "$_tk_ui_src/fmt.sh"
 
     unset _tk_ui_src
 fi
